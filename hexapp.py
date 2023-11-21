@@ -3,7 +3,7 @@ from math import sin, cos, pi
 import time
 
 import pygame
-# from pygame.locals import *
+#from pygame.locals import *
 
 from hexgame import HexGame
 from hexglobals import PYGAME_COLORS

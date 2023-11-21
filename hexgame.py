@@ -115,7 +115,7 @@ class HexGame:
     for i in range(visited.shape[0]):
       if self.board.get_tile(i,0) == PLAYER["blue"]:
         visited[i,0] = PLAYER["blue"]
-        visitied = self.__visit(i, 0, PLAYER["blue"], visited)
+        visited = self.__visit(i, 0, PLAYER["blue"], visited)
 
     if np.any(visited[:,-1] == PLAYER["blue"]):
       return PLAYER["blue"]
