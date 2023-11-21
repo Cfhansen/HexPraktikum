@@ -2,10 +2,8 @@ import numpy
 import pygame
 import random
 
-from SearchTreeNode import SearchTreeNode
 from hexgame import HexBoard
 from new_player import NewPlayer
-from new_player2 import NewPlayer2
 from HexNode import HexNode
 
 def TestCarryOutSimulation():
@@ -70,8 +68,17 @@ def TestListUpdate():
     thisList.insert(0,'b')
     print(thisList)
 
+def TestDim():
+    thisBoard = HexBoard(numpy.zeros((5,5)))
+    (xdim, ydim) = thisBoard.dim()
+    for i in range(xdim):
+        print(i)
+    print(ydim)
+    print(thisBoard.get_tile(4,4))
+
         
-TestListUpdate()
+#TestListUpdate()
 #TestCarryOutSearch()
 #TestCarryOutSimulation()
 #TestUpdateChildren()
+TestDim()

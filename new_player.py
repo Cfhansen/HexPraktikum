@@ -104,6 +104,104 @@ class NewPlayer(BasePlayer):
     simulatedBoard = copy.deepcopy(thisNode.getBoard())
     (xdim, ydim) = simulatedBoard.dim()
     for i in range(xdim):
+      for j in range(ydim):
+        if simulatedBoard.get_tile(i, j) == 0:
+          newMove = (i, j)
+          validMoves.append(newMove)
+    while validMoves:
+      threatenedBridgeMove = self.ThreatenedBridge(simulatedBoard)
+      if threatenedBridgeMove:
+        # Play the move
+        (i, j) = threatenedBridgeMove
+        simulatedBoard.set_tile(i, j, self.simulatedPlayer)
+        self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
+        moveToRemove = (i, j)
+        validMoves.remove(moveToRemove)
+      else:
+        # Pick a random move
+        (i, j) = random.choice(validMoves)
+        simulatedBoard.set_tile(i, j, self.simulatedPlayer)
+        self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
+        moveToRemove = (i, j)
+        validMoves.remove(moveToRemove)
+    dummy_player1 = RandomPlayer()
+    dummy_player2 = RandomPlayer()
+    newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
+    return newGame.check_finish()
+  
+  def ThreatenedBridge(self, board):
+    thisBoard = board
+    (xdim, ydim) = thisBoard.dim()
+    threatenedTiles = list()
+    for i in range(xdim):
+      for j in range(ydim):
+        if thisBoard.get_tile(i,j) == self.simulatedPlayer:
+          originalTile = (i,j)
+          # Case 1: Bridge to the upper right
+          if (i+2 < xdim) & (j+1 < ydim):
+            if board.get_tile(i+2,j+1) == self.simulatedPlayer:
+              if (board.get_tile(i+1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j+1) == 0):
+                move = (i+1,j+1)
+                threatenedTiles.append(move)
+          # Case 2: Bridge to the lower right
+          if (i+1 < xdim) & (j-1 > 0):
+            if board.get_tile(i+1,j-1) == self.simulatedPlayer:
+              if (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
+                move = (i,j-1)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                threatenedTiles.append(move)
+          # Case 3: Bridge directly below
+          if (i-1 > 0) & (j-2 > 0):
+            if board.get_tile(i-1,j-2) == self.simulatedPlayer:
+              if (board.get_tile(i,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j-1) == 0):
+                move = (i-1,j-1)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i-1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
+                move = (i,j-1)
+                threatenedTiles.append(move)
+          # Case 4: Bridge below and to the left
+          if (i-2 > 0) & (j-1 > 0):
+            if board.get_tile(i-1,j) == self.simulatedPlayer:
+              if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j-1) == 0):
+                move = (i-1,j-1)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i-1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                threatenedTiles.append(move)
+          # Case 5: Bridge above and to the left
+          if (i-1 > 0) & (j+1 < ydim):
+            if board.get_tile(i-1,j+1) == self.simulatedPlayer:
+              if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                threatenedTiles.append(move)
+          # Case 6: Bridge directly above
+          if (i+1 < xdim) & (j+2 < ydim):
+            if board.get_tile(i+1,j+2) == self.simulatedPlayer:
+              if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j+1) == 0):
+                move = (i+1,j+1)
+                threatenedTiles.append(move)
+              elif (board.get_tile(i+1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                threatenedTiles.append(move)
+      if threatenedTiles:
+        return random.choice(threatenedTiles)
+      else:
+        return None
+      
+
+"""     while threatenedBridgeMove:
+      (i, j) = threatenedBridgeMove
+      simulatedBoard.set_tile(i, j, self.simulatedPlayer)
+      self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
+    for i in range(xdim):
         for j in range(ydim):
             if simulatedBoard.get_tile(i, j) == 0:
               newMove = (i, j)
@@ -117,30 +215,4 @@ class NewPlayer(BasePlayer):
     dummy_player1 = RandomPlayer()
     dummy_player2 = RandomPlayer()
     newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
-    return newGame.check_finish()
-  
-"""   def ThreatenedBridge(self, board):
-    thisBoard = board
-    (xdim, ydim) = thisBoard.dim()
-    for i in range(xdim):
-      for j in range(ydim):
-        if thisBoard.get_tile(i,j) == self.currentPlayer: """
-
-  
-"""   def BridgeCheck(self, move, board):
-     
-  
-  def FindBridge(self, board):
-    # Iterate over all board positions to find a potential bridge
-    for i in range(board.dim()[0]):
-      for j in range(board.dim()[1]):
-        if board.get_tile(i, j) == 0:
-          # Place a stone and check if it forms a bridge
-          board.set_tile(i, j, self.currentPlayer)
-          if self.CheckBridge(board, i, j):
-            # If it forms a bridge, return the position
-            return i, j
-          else:
-            # If not, undo the move
-            board.set_tile(i, j, 0)
-    return None """
+    return newGame.check_finish() """

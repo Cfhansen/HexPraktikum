@@ -2,8 +2,6 @@ from base_player import BasePlayer
 from random_player import RandomPlayer
 from human_player import HumanPlayer
 from new_player import NewPlayer
-from new_player2 import NewPlayer2
-from TestPlayer import TestPlayer
 from hexapp import HexApp
 from hexglobals import PLAYER
 
@@ -15,10 +13,10 @@ if __name__ == "__main__":
   swap2 = lambda board, *args : BasePlayer.random_swap(board, *args)
 
   player1 = RandomPlayer(swap1)
-  player2 = NewPlayer2(swap2)
+  player2 = NewPlayer(swap2)
 
   # Set up empty board
-  dim = 11
+  dim = 17
   board = np.zeros((dim, dim), dtype=int)
 
   # Manual changes
