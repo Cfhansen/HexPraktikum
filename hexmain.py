@@ -12,8 +12,8 @@ if __name__ == "__main__":
   swap1 = lambda board, *args : BasePlayer.pygame_manual_swap(board, *args)
   swap2 = lambda board, *args : BasePlayer.random_swap(board, *args)
 
-  player1 = RandomPlayer(swap1)
-  player2 = NewPlayer(swap2)
+  player2 = RandomPlayer(swap1)
+  player1 = NewPlayer(swap2)
 
   # Set up empty board
   dim = 7
