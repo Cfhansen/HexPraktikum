@@ -61,7 +61,7 @@ class NewPlayer(BasePlayer):
       for j in range(ydim):
         if ((i, j) in positions) and (board.get_tile(i, j) == 3 - self.currentPlayer):
           res = True
-          print('Claiming swap: Opponent played at: {}'.format((i, j)))
+          print('Wird geswappt: Gegner hat {} gespielt'.format((i, j)))
     return res
 
   def choose_tile(self, board, *args) -> tuple:
@@ -94,7 +94,7 @@ class NewPlayer(BasePlayer):
         end = time.time()
         elapsed = elapsed + end - start
         if n%100 == 0:
-          print('Search time: {} with {} playouts so far.'.format(elapsed, n))
+          print('Suchzeit für diesen Zug: {} mit bislang {} simulierten Spielen.'.format(elapsed, n))
     visitedNodes = list()
     if currentBoardState.children:
       maxUCTScore = -1
@@ -108,7 +108,7 @@ class NewPlayer(BasePlayer):
         for j in range(ydim):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
-            print('Moved at {} with UCT score: {}'.format(newMove, maxUCTScore))
+            print('Zug: {} mit UCT-Wert: {}'.format(newMove, maxUCTScore))
             self.totalMoveCount += 1
             if self.totalMoveCount > 10:
               self.maxWaitTime = self.maxWaitTime + self.totalMoveCount - 10
