@@ -16,7 +16,7 @@ if __name__ == "__main__":
   player2 = NewPlayer(swap2)
 
   # Set up empty board
-  dim = 11
+  dim = 7
   board = np.zeros((dim, dim), dtype=int)
 
   # Manual changes

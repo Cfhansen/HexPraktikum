@@ -50,10 +50,6 @@ class NewPlayer(BasePlayer):
     if currentBoardState.children:
       maxUCTScore = -1
       for child in currentBoardState.children:
-        #print('Searching the node:')
-        #print(child.getBoard().board)
-        #print('With UCT score:')
-        #print(child.getUCTScore())
         if child.getUCTScore() > maxUCTScore:
           maxUCTScore = child.getUCTScore()
           bestChild = child
@@ -109,17 +105,12 @@ class NewPlayer(BasePlayer):
           newMove = (i, j)
           validMoves.append(newMove)
     while validMoves:
-      threatenedBridgeMove = self.ThreatenedBridge(simulatedBoard)
-      if threatenedBridgeMove:
+      print('Number of valid moves:')
+      print(len(validMoves))
+      nextMove = self.analyzeMoves(simulatedBoard)
+      if nextMove:
         # Play the move
-        (i, j) = threatenedBridgeMove
-        simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-        self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
-        moveToRemove = (i, j)
-        validMoves.remove(moveToRemove)
-      else:
-        # Pick a random move
-        (i, j) = random.choice(validMoves)
+        (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
         self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
         moveToRemove = (i, j)
@@ -129,14 +120,14 @@ class NewPlayer(BasePlayer):
     newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
     return newGame.check_finish()
   
-  def ThreatenedBridge(self, board):
+  def analyzeMoves(self, board):
     thisBoard = board
     (xdim, ydim) = thisBoard.dim()
     threatenedTiles = list()
+    emptyTiles = list()
     for i in range(xdim):
       for j in range(ydim):
         if thisBoard.get_tile(i,j) == self.simulatedPlayer:
-          originalTile = (i,j)
           # Case 1: Bridge to the upper right
           if (i+2 < xdim) & (j+1 < ydim):
             if board.get_tile(i+2,j+1) == self.simulatedPlayer:
@@ -191,28 +182,12 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i+1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
                 move = (i,j+1)
                 threatenedTiles.append(move)
-      if threatenedTiles:
-        return random.choice(threatenedTiles)
-      else:
-        return None
-      
-
-"""     while threatenedBridgeMove:
-      (i, j) = threatenedBridgeMove
-      simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-      self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
-    for i in range(xdim):
-        for j in range(ydim):
-            if simulatedBoard.get_tile(i, j) == 0:
-              newMove = (i, j)
-              validMoves.append(newMove)
-    random.shuffle(validMoves)
-    if validMoves:
-        for move in validMoves:
-          (i, j) = move
-          simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-          self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
-    dummy_player1 = RandomPlayer()
-    dummy_player2 = RandomPlayer()
-    newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
-    return newGame.check_finish() """
+        elif thisBoard.get_tile(i,j) == 0:
+          move = (i,j)
+          emptyTiles.append(move)
+    if threatenedTiles:
+      return random.choice(threatenedTiles)
+    elif emptyTiles:
+      return random.choice(emptyTiles)
+    else:
+      return None
