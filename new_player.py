@@ -1,3 +1,10 @@
+# Wir haben einen Monte-Carlo-Spieler basierend auf dem MoHex-Paper von Broderick Arneson, Ryan Hayward und Philip Anderson implementiert.
+# Der Spieler kann entweder als Player 1 oder als Player 2 funktionieren. Er erkennt seine Rolle anhand der Tatsache, dass die Swapregel nur von Player 2 ausgeführt wird.
+# Der Spieler wählt Züge völlig auf Basis des Monte-Carlo-Suchbaums und ist derzeit unfähig, eine gewinnende Position zu erkennen.
+
+# Ich habe die Bedenkzeit (maxWaitTime) auf 15 Sekunden eingestellt. Das ist nach meiner Erfahrung schon genug Zeit, um den randome Spieler auf einem 7x7-Brett
+# zuverlässig zu schlagen. Auf größeren Brettern sind längere Bedenkzeiten ggf. nötig. Im MoHex-Paper wird bis zu 90 Sekunden als eine sinnvolle Bedenkzeit für Turnierspiele angegeben.
+
 from base_player import BasePlayer
 
 import numpy as np
@@ -21,12 +28,12 @@ class NewPlayer(BasePlayer):
     self.searchTree = list()
     self.threshhold = 5
     self.turnLimit = 50000
-    self.maxWaitTime = 15
-    self.capWaitTime = 70
+    self.maxWaitTime = 90
     self.totalMoveCount = 0
     self.thisBoard = None
+    self.searchNumber = 500
 
-  def claim_swap(self, board, *args) -> bool: #Ignore passed swap function, use custom function instead
+  def claim_swap(self, board, *args) -> bool: #Ignoriere die vorgegebene Swapfunktion; nutze stattdessen diese kustomisierte Funktion
     res = False
     self.currentPlayer = 2
     self.simulatedPlayer = self.currentPlayer
@@ -93,7 +100,7 @@ class NewPlayer(BasePlayer):
         self.CarryOutSearch(currentBoardState)
         end = time.time()
         elapsed = elapsed + end - start
-        if n%100 == 0:
+        if n%self.searchNumber == 0:
           print('Suchzeit für diesen Zug: {} mit bislang {} simulierten Spielen.'.format(elapsed, n))
     visitedNodes = list()
     if currentBoardState.children:
@@ -109,12 +116,6 @@ class NewPlayer(BasePlayer):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Zug: {} mit UCT-Wert: {}'.format(newMove, maxUCTScore))
-            self.totalMoveCount += 1
-            if self.totalMoveCount > 10:
-              self.maxWaitTime = self.maxWaitTime + self.totalMoveCount - 10
-            self.maxWaitTime = min(self.maxWaitTime, self.capWaitTime)
-            if maxUCTScore == 1:
-              self.maxWaitTime = 5
     self.searchTree = list()
     return newMove
   
