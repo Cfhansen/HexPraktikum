@@ -28,12 +28,12 @@ class NewPlayer(BasePlayer):
     self.searchTree = list()
     self.threshhold = 5
     self.turnLimit = 50000
-    self.maxWaitTime = 90
+    self.maxWaitTime = 15
     self.totalMoveCount = 0
     self.thisBoard = None
     self.searchNumber = 500
 
-  def claim_swap(self, board, *args) -> bool: #Ignoriere die vorgegebene Swapfunktion; nutze stattdessen diese kustomisierte Funktion
+  def claim_swap(self, board, *args) -> bool: #Ignoriere die vorgegebene Swapfunktion; nutze stattdessen die hier gegebene kustomisierte Funktion
     res = False
     self.currentPlayer = 2
     self.simulatedPlayer = self.currentPlayer
@@ -94,14 +94,16 @@ class NewPlayer(BasePlayer):
     thisBoard = board
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
     elapsed = 0
+    start = None
     for n in range(self.turnLimit):
       if elapsed < self.maxWaitTime:
-        start = time.time()
         self.CarryOutSearch(currentBoardState)
-        end = time.time()
-        elapsed = elapsed + end - start
-        if n%self.searchNumber == 0:
-          print('Suchzeit für diesen Zug: {} mit bislang {} simulierten Spielen.'.format(elapsed, n))
+        if n%self.searchNumber == 0: # Prüfe die vergangene Zeit jedes Mal nur nach einer bestimmten vom Parameter angegebenen Anzahl an Spielen
+          if start:
+            end = time.time()
+            elapsed = elapsed + end - start
+            print('Suchzeit für diesen Zug: {} mit bislang {} simulierten Spielen.'.format(elapsed, n))
+          start = time.time()
     visitedNodes = list()
     if currentBoardState.children:
       maxUCTScore = -1
@@ -116,7 +118,7 @@ class NewPlayer(BasePlayer):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Zug: {} mit UCT-Wert: {}'.format(newMove, maxUCTScore))
-    self.searchTree = list()
+    #self.searchTree = list()
     return newMove
   
   def CarryOutSearch(self, baseNode):
@@ -160,10 +162,10 @@ class NewPlayer(BasePlayer):
     while validMoves:
       nextMove = self.analyzeMoves(simulatedBoard)
       if nextMove:
-        # Play the move
+        # Zug wird gespielt
         (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-        self.simulatedPlayer = 3 - self.simulatedPlayer # Switch players
+        self.simulatedPlayer = 3 - self.simulatedPlayer # Wechsle auf den anderen Spieler
         moveToRemove = (i, j)
         validMoves.remove(moveToRemove)
     dummy_player1 = RandomPlayer()
@@ -179,7 +181,7 @@ class NewPlayer(BasePlayer):
     for i in range(xdim):
       for j in range(ydim):
         if thisBoard.get_tile(i,j) == self.simulatedPlayer:
-          # Case 1: Bridge to the upper right
+          # Fall 1: Brücke rechts oben
           if (i+2 < xdim) & (j+1 < ydim):
             if board.get_tile(i+2,j+1) == self.simulatedPlayer:
               if (board.get_tile(i+1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
@@ -188,7 +190,7 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j+1) == 0):
                 move = (i+1,j+1)
                 threatenedTiles.append(move)
-          # Case 2: Bridge to the lower right
+          # Fall 2: Brücke rechts unten
           if (i+1 < xdim) & (j-1 > 0):
             if board.get_tile(i+1,j-1) == self.simulatedPlayer:
               if (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
@@ -197,7 +199,7 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
                 move = (i+1,j)
                 threatenedTiles.append(move)
-          # Case 3: Bridge directly below
+          # Fall 3: Brücke lotrecht unten
           if (i-1 > 0) & (j-2 > 0):
             if board.get_tile(i-1,j-2) == self.simulatedPlayer:
               if (board.get_tile(i,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j-1) == 0):
@@ -206,7 +208,7 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i-1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
                 move = (i,j-1)
                 threatenedTiles.append(move)
-          # Case 4: Bridge below and to the left
+          # Fall 4: Brücke links unten
           if (i-2 > 0) & (j-1 > 0):
             if board.get_tile(i-1,j) == self.simulatedPlayer:
               if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j-1) == 0):
@@ -215,7 +217,7 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i-1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
                 move = (i-1,j)
                 threatenedTiles.append(move)
-          # Case 5: Bridge above and to the left
+          # Fall 5: Brücke links oben
           if (i-1 > 0) & (j+1 < ydim):
             if board.get_tile(i-1,j+1) == self.simulatedPlayer:
               if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
@@ -224,7 +226,7 @@ class NewPlayer(BasePlayer):
               elif (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
                 move = (i-1,j)
                 threatenedTiles.append(move)
-          # Case 6: Bridge directly above
+          # Fall 6: Brücke lotrecht oben
           if (i+1 < xdim) & (j+2 < ydim):
             if board.get_tile(i+1,j+2) == self.simulatedPlayer:
               if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j+1) == 0):
