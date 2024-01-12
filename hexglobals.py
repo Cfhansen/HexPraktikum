@@ -1,2 +1,5 @@
-PYGAME_COLORS = ["black", "red", "blue", "green4", "brown", "orchid"]
-PLAYER = {"red": 1, "blue": 2}
+# Change here to adapt coloring scheme
+PLAYER_COLORS = ["black", "white"]
+BACKGROUND_COLOR = "grey42"
+BORDER_COLOR = "gold4"
+EMPTY_TILE_COLOR = BACKGROUND_COLOR

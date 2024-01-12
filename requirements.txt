@@ -1,0 +1,6 @@
+numpy
+pygame
+# bs4
+beautifulsoup4
+selenium
+pygame-widgets

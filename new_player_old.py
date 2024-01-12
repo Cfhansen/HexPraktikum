@@ -1,9 +1,8 @@
-# Wir haben einen Monte-Carlo-Spieler basierend auf dem MoHex-Paper von Broderick Arneson, Ryan Hayward und Philip Anderson implementiert.
-# Der Spieler kann entweder als Player 1 oder als Player 2 funktionieren. Er erkennt seine Rolle anhand der Tatsache, dass die Swapregel nur von Player 2 ausgeführt wird.
-# Der Spieler wählt Züge völlig auf Basis des Monte-Carlo-Suchbaums und ist derzeit unfähig, eine gewinnende Position zu erkennen.
-
-# Ich habe die Bedenkzeit (maxWaitTime) auf 15 Sekunden eingestellt. Das ist nach meiner Erfahrung schon genug Zeit, um den randome Spieler auf einem 7x7-Brett
-# zuverlässig zu schlagen. Auf größeren Brettern sind längere Bedenkzeiten ggf. nötig. Im MoHex-Paper wird bis zu 90 Sekunden als eine sinnvolle Bedenkzeit für Turnierspiele angegeben.
+# Teilnehmer: Hansen/Reschke
+# Testen des Codes:
+# from new_player import NewPlayer
+# player1 = NewPlayer()
+# (or:) player2 = NewPlayer()
 
 from base_player import BasePlayer
 
@@ -20,17 +19,17 @@ from HexNode import HexNode
 from hexgame import HexGame
 from random_player import RandomPlayer
 
-class NewPlayer(BasePlayer):
+class NewPlayerOld(BasePlayer):
   def __init__(self, swap_fun=lambda board, *args: False):
     self.currentPlayer = 1
     self.simulatedPlayer = 1
     self._swap_fun = swap_fun
-    self.searchTree = list() # self.buildSearchTree(HexNode(HexBoard(np.zeros((7, 7), dtype=int)), self.currentPlayer), list())
-    self.threshhold = 5
+    self.searchTree = list()
+    self.threshhold = 10
     self.turnLimit = 50000
-    self.maxWaitTime = 10
+    self.maxWaitTime = 5
     self.totalMoveCount = 0
-    self.thisBoard = np.zeros((7, 7), dtype=int)
+    self.thisBoard = None
     self.searchNumber = 500
 
   def claim_swap(self, board, *args) -> bool: #Ignoriere die vorgegebene Swapfunktion; nutze stattdessen die hier gegebene kustomisierte Funktion
@@ -92,6 +91,7 @@ class NewPlayer(BasePlayer):
     newMove = BasePlayer.random_choice(board, *args)
 
     thisBoard = board
+    thisBoard = self.InfillBoardState(thisBoard)
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
     elapsed = 0
     start = None
@@ -118,7 +118,6 @@ class NewPlayer(BasePlayer):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Zug: {} mit UCT-Wert: {}'.format(newMove, maxUCTScore))
-    #self.searchTree = list()
     return newMove
   
   def CarryOutSearch(self, baseNode):
@@ -146,10 +145,64 @@ class NewPlayer(BasePlayer):
                         newBoard = copy.deepcopy(nodeBoard)
                         newBoard.set_tile(i, j, node.getCurrentPlayer())
                         newChild = HexNode(newBoard, 3 - node.getCurrentPlayer())
-                        #if not newChild in self.searchTree:
                         self.searchTree.append(newChild)
                         newChild.setParent(thisNode)
                         node.addChild(newChild)
+                 
+  def InfillBoardState(self, board):
+    print('Calculating infill...')
+    thisBoard = copy.deepcopy(board)
+    (xdim, ydim) = thisBoard.dim()
+    for i in range(xdim):
+      for j in range(ydim):
+        if thisBoard.get_tile(i,j) == 0:
+          if (i > 0) & (j > 0) & (i + 1 < xdim) & (j + 1 < ydim):
+            # Muster 1: 'Kappe' des ersten Spielers
+            if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j+1) == 1):
+              print('Match found! (cap)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 2: 'Kappe' des zweiten Spielers
+            if thisBoard.get_tile(i-1,j-1) == 2 & thisBoard.get_tile(i,j-1) == 2 & thisBoard.get_tile(i+1,j) == 2 & thisBoard.get_tile(i+1,j+1) == 2:
+              print('Match found! (cap)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 3: 'Pfeil' des ersten Spielers
+            if thisBoard.get_tile(i-1,j-1) == 1 & thisBoard.get_tile(i-1,j) == 1 & thisBoard.get_tile(i,j+1) == 1 & thisBoard.get_tile(i+1,j) == 2:
+              print('Match found! (arrow)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4: 'Pfeil' des zweiten Spielers
+            if thisBoard.get_tile(i,j-1) == 2 & thisBoard.get_tile(i+1,j) == 2 & thisBoard.get_tile(i+1,j+1) == 2 & thisBoard.get_tile(i-1,j) == 1:
+              print('Match found! (arrow)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)     
+            # Muster 5: 'tote Brücke'
+            if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j+1) == 2):
+              print('Match found! (dead bridge)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 6: am Rand, Steine links und oben links  
+          if (i == xdim-1) & (j > 0):
+            if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1):
+              print('Match found! (self block on bottom edge)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 7: am Rand, Steine Links und rechts
+          if (i == xdim) & (j > 0) & (i+1 < xdim) & (j+1 < ydim):
+            if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i+1,j+1) == 1):
+              print('Match found! (self sandwich on bottom edge)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 8: am Rand, Steine oben links and rechts
+          if (j == ydim) & (i+1 < xdim) & (j+1 < ydim):
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j+1) == 2):
+              print('Match found! (double block on bottom edge)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)  
+            # Muster 9: am Rand, Steine oben links und oben rechts
+          if (j == ydim) & (i+1 < xdim):
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1):
+              print('Match found! (blocked by opponent on bottom edge)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)  
+            # Muster 10: im Winkel
+          if (j == ydim) & (i == xdim):
+            if (thisBoard.get_tile(i-1,j-1) == 2):
+              print('Match found! (corner block)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+    return thisBoard      
 
   def CarryOutSimulation(self, thisNode):
     validMoves = list()
@@ -173,15 +226,6 @@ class NewPlayer(BasePlayer):
     dummy_player2 = RandomPlayer()
     newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
     return newGame.check_finish()
-  
-  def buildSearchTree(self, simulatedBoard, searchTree):
-    (xdim, ydim) = simulatedBoard.dim()
-    self.simulatedPlayer = self.currentPlayer
-    for i in range(xdim):
-      for j in range(ydim):
-        if simulatedBoard.get_tile(i, j) == 0:
-          simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-          self.simulatedPlayer = 3 - self.simulatedPlayer # Wechsle auf den anderen Spieler            
   
   def analyzeMoves(self, board):
     thisBoard = board
