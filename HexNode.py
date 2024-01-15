@@ -15,9 +15,12 @@ class HexNode:
         self.children = list()
         self.UCTScore = 0
         self.thisBoard = board
-        self.numberOfVisits = 0
+        self.numberOfVisits = 1
         self.numberOfWins = 0
         self.currentPlayer = current_player
+        self.AMAFScore = 0
+        self.AMAFNumberOfWins = 0
+        self.AMAFNumberOfVisits = 1
 
     def setParent(self, node):
         self.parent = node
@@ -27,6 +30,9 @@ class HexNode:
 
     def addChild(self, node):
         self.children.append(node)
+
+    def getChildren(self):
+        return self.children
 
     def getBoard(self):
         return self.thisBoard
@@ -45,3 +51,15 @@ class HexNode:
 
     def numberOfChildren(self):
         return len(self.children)
+    
+    def updateAMAF(self, result):
+        if result:
+            self.AMAFNumberOfWins += 1
+        self.AMAFNumberOfVisits += 1
+        self.UCTScore = self.AMAFNumberOfWins / self.AMAFNumberOfVisits
+
+    def getAMAFScore(self):
+        return self.AMAFScore
+    
+    def getRAVEScore(self):
+        return (self.numberOfWins + self.AMAFNumberOfWins) / (self.numberOfVisits + self.AMAFNumberOfVisits)

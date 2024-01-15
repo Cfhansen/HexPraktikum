@@ -2,7 +2,7 @@ from base_player import BasePlayer
 from random_player import RandomPlayer
 from human_player import HumanPlayer
 from hexapp import HexApp
-from new_player_old import NewPlayerOld
+from mc_player import MCPlayer
 
 import numpy as np
 import pygame
@@ -12,8 +12,8 @@ if __name__ == "__main__":
     swap1 = lambda board, *args: BasePlayer.pygame_manual_swap(board, *args)
     swap2 = lambda board, *args: BasePlayer.random_swap(board, *args)
 
-    player2 = NewPlayerOld(swap2)
-    player1 = HumanPlayer(swap2)
+    player2 = MCPlayer(swap2)
+    player1 = MCPlayer(swap2)
 
     # Set up empty board
     dim = 7                                                     
@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # Manual changes
     # board[0,0] = 1 # Player 1
-    # board[2,2] = 2 # Player 2
+    #board[5,1] = 2 # Player 2
 
     pygame.init()
 

@@ -97,6 +97,9 @@ def TestInfill():
     print(thisBoard.get_tile(2,3))
     print(range(thisBoard.dim()[0]))
 
+def TestRandom():
+    print(random.uniform(0,1))
+
         
 #TestListUpdate()
 #TestCarryOutSearch()
@@ -104,4 +107,5 @@ def TestInfill():
 #TestUpdateChildren()
 #TestDim()
 #TestSearchTree()
-TestInfill()
+#TestInfill()
+TestRandom()

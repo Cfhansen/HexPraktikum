@@ -10,8 +10,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.expected_conditions import element_to_be_clickable, presence_of_element_located, \
     invisibility_of_element_located
 from selenium.webdriver.support.wait import WebDriverWait as DriverWait
+from selenium.webdriver.chrome.options import Options
 
 from base_player import BasePlayer
+
 
 
 class PuzzlePlayer(BasePlayer):
@@ -30,7 +32,11 @@ class PuzzlePlayer(BasePlayer):
         self.reflect_board = False
         self.board = None
 
-        self.driver = webdriver.Chrome()
+        chromeOptions = Options()
+        chromeOptions.add_argument("--headless")
+        chromeOptions.add_argument("--no-sandbox")
+        chromeOptions.add_argument("--disable-dev-shm-usage")
+        self.driver = webdriver.Chrome(options=chromeOptions)
         self.driver.get('http://www.mseymour.ca/hex_puzzle/hexpuzzle.html')
 
     def get_board(self, level_number, size=11, pass_if_required=True) -> np.ndarray:
