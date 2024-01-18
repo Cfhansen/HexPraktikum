@@ -2,6 +2,7 @@ from base_player import BasePlayer
 from random_player import RandomPlayer
 from human_player import HumanPlayer
 from hexapp import HexApp
+from mc_player_old import MCPlayerOld
 from mc_player import MCPlayer
 
 import numpy as np
@@ -12,8 +13,8 @@ if __name__ == "__main__":
     swap1 = lambda board, *args: BasePlayer.pygame_manual_swap(board, *args)
     swap2 = lambda board, *args: BasePlayer.random_swap(board, *args)
 
-    player2 = MCPlayer(swap2)
     player1 = MCPlayer(swap2)
+    player2 = MCPlayer(swap2)
 
     # Set up empty board
     dim = 7                                                     

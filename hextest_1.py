@@ -4,7 +4,7 @@ import random
 
 from hexgame import HexBoard
 from base_player import BasePlayer
-from new_player import NewPlayer
+from mc_player import NewPlayer
 from new_player_old import NewPlayerOld
 from HexNode import HexNode
 

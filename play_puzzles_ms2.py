@@ -5,6 +5,7 @@ from human_player import HumanPlayer
 from puzzle_player import PuzzlePlayer
 from level_select import LevelSelect
 from random_player import RandomPlayer
+from mc_player_old import MCPlayerOld
 from mc_player import MCPlayer
 
 if __name__ == "__main__":
@@ -14,7 +15,7 @@ if __name__ == "__main__":
     puzzle_player = PuzzlePlayer()
 
     #levels = [1, 2, 6, 11, 20, 23, 24, 26, 29, 37, 41, 51, 54, 58, 60]
-    levels = [1, 2, 6, 11, 20, 23, 24, 26, 29, 37]
+    levels = [1, 2, 6, 11, 20, 23, 24, 26, 29, 37, 41, 51, 54, 58, 60]
     win = len(levels) * [False]
 
     # You can also pick certain levels from the list!
