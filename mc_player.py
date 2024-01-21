@@ -102,7 +102,6 @@ class MCPlayer(BasePlayer):
       dummy_player2 = RandomPlayer()
       newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
       if (newGame.check_finish() == self.currentPlayer):
-        print('Win recognized')
         return move
     # Falls kein sofortiger Gewinn möglich ist: durchlaufe den Suchbaum
     elapsed = 0
