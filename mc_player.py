@@ -87,6 +87,24 @@ class MCPlayer(BasePlayer):
     thisBoard = board
     #simulatedBoard = self.InfillBoardState(thisBoard)
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
+    # Prüfe das Brett auf einen sofortigen Gewinn
+    validMoves = list()
+    for i in range(xdim):
+      for j in range(ydim):
+        if thisBoard.get_tile(i, j) == 0:
+          newMove = (i, j)
+          validMoves.append(newMove)
+    for move in validMoves:
+      simulatedBoard = copy.deepcopy(thisBoard)
+      (i, j) = move
+      simulatedBoard.set_tile(i, j, self.currentPlayer)
+      dummy_player1 = RandomPlayer()
+      dummy_player2 = RandomPlayer()
+      newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
+      if (newGame.check_finish() == self.currentPlayer):
+        print('Win recognized')
+        return move
+    # Falls kein sofortiger Gewinn möglich ist: durchlaufe den Suchbaum
     elapsed = 0
     start = None
     for n in range(self.turnLimit):
@@ -111,8 +129,8 @@ class MCPlayer(BasePlayer):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Current player: {}. Zug: {} mit UCT-Wert: {}'.format(self.currentPlayer, newMove, maxUCTScore))
-            for child in newBoardState.children:
-              print('UCT score of child: {} with {} UCT visits'.format(child.getUCTScore(), child.getUCTVisits()))
+            #for child in newBoardState.children:
+              #print('UCT score of child: {} with {} UCT visits'.format(child.getUCTScore(), child.getUCTVisits()))
     #self.searchTree = list()
     return newMove
   
@@ -181,7 +199,6 @@ class MCPlayer(BasePlayer):
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
         self.simulatedPlayer = 3 - self.simulatedPlayer # Wechsle auf den anderen Spieler
         moveToRemove = (i, j)
-        #print('Move to remove:{}'.format(moveToRemove))
         if moveToRemove in validMoves:
             validMoves.remove(moveToRemove)
     dummy_player1 = RandomPlayer()
