@@ -21,12 +21,33 @@ class MCPlayer(BasePlayer):
     self.searchTree = list()
     self.threshhold = 3
     self.turnLimit = 50000
-    self.maxWaitTime = 25
+    self.maxWaitTime = 15
     self.totalMoveCount = 0
     self.thisBoard = None
     self.searchNumber = 50
 
-  def claim_swap(self, board, *args) -> bool: #Ignoriere die vorgegebene Swapfunktion; nutze stattdessen die hier gegebene kustomisierte Funktion
+  def claim_swap(self, board, *args) -> bool:
+    """
+    Chooses whether to swap depending on first enemy move.
+
+    Parameters
+    ----------
+    board : HexBoard
+        Current state of the Hex board.
+    args : tuple, optional
+        Further parameters in tuple possibly required by heuristic.
+    
+    Returns
+    -------
+    res : bool
+        Chooses whether or not to swap tiles.
+
+    """
+
+
+    """
+    Based on known winning/losing positions from existing research. Swaps if the opponent's first move is to a known winning tile.
+    """
     res = False
     self.currentPlayer = 2
     self.simulatedPlayer = self.currentPlayer
@@ -61,12 +82,18 @@ class MCPlayer(BasePlayer):
       for j in range(ydim):
         if ((i, j) in positions) and (board.get_tile(i, j) == 3 - self.currentPlayer):
           res = True
-          print('Wird geswappt: Gegner hat {} gespielt'.format((i, j)))
     return res
 
   def choose_tile(self, board, *args) -> tuple:
     """
-    Chooses a tile based on given heuristic / algorithm.
+    Chooses a tile based on Monte Carlo tree search.
+
+    In the case that a one-move win is possible, choose this move.
+
+    Otherwise, we search the tree until the time limit ends. Each time that a leaf node is reached, we carry out Monte Carlo simulations and adjust the UCT score
+    of all visited nodes.
+
+    The final choice is the child node with the best UCT score, that is, the largest proportion of wins in the Monte Carlo simulations.
 
     Parameters
     ----------
@@ -78,7 +105,7 @@ class MCPlayer(BasePlayer):
     Returns
     -------
     res : tuple (int, int)
-        Indices of resulting tile.
+        Returns coordinates of the move with the best UCT score.
 
     """
     (xdim, ydim) = board.dim()
@@ -87,7 +114,9 @@ class MCPlayer(BasePlayer):
     thisBoard = board
     #simulatedBoard = self.InfillBoardState(thisBoard)
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
-    # Prüfe das Brett auf einen sofortigen Gewinn
+    """
+      First: Produce a list of all possible moves. Check whether a win is possible.
+     """
     validMoves = list()
     for i in range(xdim):
       for j in range(ydim):
@@ -103,18 +132,23 @@ class MCPlayer(BasePlayer):
       newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
       if (newGame.check_finish() == self.currentPlayer):
         return move
-    # Falls kein sofortiger Gewinn möglich ist: durchlaufe den Suchbaum
+    """
+      If no win is possible: Carry out the Monte Carlo tree search until time runs out.
+     """  
     elapsed = 0
     start = None
     for n in range(self.turnLimit):
       if elapsed < self.maxWaitTime:
         self.CarryOutSearch(currentBoardState)
-        if n%self.searchNumber == 0: # Prüfe die vergangene Zeit jedes Mal nur nach einer bestimmten vom Parameter angegebenen Anzahl an Spielen
+        if n%self.searchNumber == 0:
           if start:
             end = time.time()
             elapsed = elapsed + end - start
           start = time.time()
     visitedNodes = list()
+    """
+      Examine all children of the current node and choose the one with the best UCT score. This is the next move.
+     """  
     if currentBoardState.children:
       maxUCTScore = -1
       for child in currentBoardState.children:
@@ -128,15 +162,31 @@ class MCPlayer(BasePlayer):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Current player: {}. Zug: {} mit UCT-Wert: {}'.format(self.currentPlayer, newMove, maxUCTScore))
-            #for child in newBoardState.children:
-              #print('UCT score of child: {} with {} UCT visits'.format(child.getUCTScore(), child.getUCTVisits()))
-    #self.searchTree = list()
     return newMove
   
   def CarryOutSearch(self, baseNode):
+    """
+    Carries out one loop of Monte Carlo tree search.
+
+    In one loop, the program traverses the search tree to a leaf node. Starting at this node, a simulated game is carried out. The results are used to update the UCT
+    values in the search tree.
+
+    Parameters
+    ----------
+    baseNode: The node in the search tree at which the search begins.
+    
+    Returns
+    -------
+    Nothing. Updates are made within the function.
+
+    """
     thisNode = baseNode
     visitedNodes = list()
     visitedNodes.append(thisNode)
+
+    """
+    Choose the best child of the current node. In general, we choose the child with the highest UCT score, but sometimes choose randomly to allow for exploration.
+    """
     while thisNode.children:
       if (thisNode.getCurrentPlayer() == self.currentPlayer):
         maxUCTScore = -1
@@ -148,7 +198,6 @@ class MCPlayer(BasePlayer):
           thisNode = random.choice(thisNode.children)
         else:
           thisNode = bestChild
-        #print('Current player: {}. Choosing node with UCT-Score {}'.format(self.currentPlayer, thisNode.getUCTScore()))
       elif (thisNode.getCurrentPlayer() == 3 - self.currentPlayer):
         minUCTScore = 2
         for child in thisNode.children:
@@ -160,9 +209,11 @@ class MCPlayer(BasePlayer):
         else:
           thisNode = bestChild
       visitedNodes.append(thisNode)
+    """
+    Upon reaching a leaf, we carry out a simulation and update the UCT scores of all traversed nodes.
+    """
     winner = self.CarryOutSimulation(thisNode)
     result = (winner == self.currentPlayer)
-    #print('Current player: {}. Winner: {}'.format(self.currentPlayer, winner))
     for node in visitedNodes:
         node.updateUCT(result)
         nodeBoard = node.getBoard()
@@ -181,6 +232,18 @@ class MCPlayer(BasePlayer):
                         node.addChild(newChild)
 
   def CarryOutSimulation(self, thisNode):
+    """
+    Carries out a single Monte Carlo simulation.
+
+    Parameters
+    ----------
+    thisNode: The current (leaf) node in the search tree.
+    
+    Returns
+    -------
+    Winner of the simulated game.
+
+    """
     validMoves = list()
     simulatedBoard = copy.deepcopy(thisNode.getBoard())
     (xdim, ydim) = simulatedBoard.dim()
@@ -190,13 +253,15 @@ class MCPlayer(BasePlayer):
         if simulatedBoard.get_tile(i, j) == 0:
           newMove = (i, j)
           validMoves.append(newMove)
+    """
+    Play all possible moves in order, alternating between players. Use the analyzeMoves function to choose the next move.
+    """
     while validMoves:
       nextMove = self.analyzeMoves(simulatedBoard)
       if nextMove:
-        # Zug wird gespielt
         (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
-        self.simulatedPlayer = 3 - self.simulatedPlayer # Wechsle auf den anderen Spieler
+        self.simulatedPlayer = 3 - self.simulatedPlayer
         moveToRemove = (i, j)
         if moveToRemove in validMoves:
             validMoves.remove(moveToRemove)
@@ -206,13 +271,27 @@ class MCPlayer(BasePlayer):
     return newGame.check_finish()
   
   def analyzeMoves(self, board):
-    thisBoard = board
-    (xdim, ydim) = thisBoard.dim()
+    """
+    Carries out a single Monte Carlo simulation.
+
+    Parameters
+    ----------
+    board: The current state of the board.
+    
+    Returns
+    -------
+    The coordinates of the chosen move.
+    """
+
+    """
+    Use the savebridge heuristic as described in the MoHex paper. If a move of the opposing player threatens a bridge, play into the open space to form a connection.
+    """
+    (xdim, ydim) = board.dim()
     threatenedTiles = list()
     emptyTiles = list()
     for i in range(xdim):
       for j in range(ydim):
-        if (thisBoard.get_tile(i,j) == self.simulatedPlayer):
+        if (board.get_tile(i,j) == self.simulatedPlayer):
           # Fall 1: Brücke rechts oben
           if (i-1 > 0) & (j+2 < ydim):
             if (board.get_tile(i-1,j+2) == self.simulatedPlayer):
@@ -272,9 +351,14 @@ class MCPlayer(BasePlayer):
             if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
                 move = (i-1,j+1)
                 threatenedTiles.append(move)
-        elif thisBoard.get_tile(i,j) == 0:
+        elif board.get_tile(i,j) == 0:
           move = (i,j)
           emptyTiles.append(move)
+    """
+    If at least one threatened bridge was found, choose randomly from the moves which save one of these bridges.
+
+    Otherwise, choose randomly from among all other valid moves.
+    """
     if threatenedTiles:
       return random.choice(threatenedTiles)
     elif emptyTiles:
