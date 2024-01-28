@@ -21,7 +21,7 @@ class MCPlayer(BasePlayer):
     self.searchTree = list()
     self.threshhold = 3
     self.turnLimit = 50000
-    self.maxWaitTime = 15
+    self.maxWaitTime = 45
     self.totalMoveCount = 0
     self.thisBoard = None
     self.searchNumber = 50
@@ -112,7 +112,7 @@ class MCPlayer(BasePlayer):
     newMove = BasePlayer.random_choice(board, *args)
 
     thisBoard = board
-    #simulatedBoard = self.InfillBoardState(thisBoard)
+    simulatedBoard = self.InfillBoardState(thisBoard)
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
     """
       First: Produce a list of all possible moves. Check whether a win is possible.
@@ -257,7 +257,8 @@ class MCPlayer(BasePlayer):
     Play all possible moves in order, alternating between players. Use the analyzeMoves function to choose the next move.
     """
     while validMoves:
-      nextMove = self.analyzeMoves(simulatedBoard)
+      (moves, threatenedBridgePresent) = self.analyzeMoves(simulatedBoard)
+      nextMove = random.choice(moves)
       if nextMove:
         (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
@@ -360,9 +361,9 @@ class MCPlayer(BasePlayer):
     Otherwise, choose randomly from among all other valid moves.
     """
     if threatenedTiles:
-      return random.choice(threatenedTiles)
+      return (threatenedTiles, True)
     elif emptyTiles:
-      return random.choice(emptyTiles)
+      return (emptyTiles, False)
     else:
       return None
     
@@ -376,114 +377,200 @@ class MCPlayer(BasePlayer):
           if (i > 0) & (j > 0) & (i + 1 < xdim) & (j + 1 < ydim):
             # Muster 1.1: 'Kappe' des ersten Spielers
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 1) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 1.2: 'Kappe' des ersten Spielers
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 2) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 1.3: 'Kappe' des ersten Spielers
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 3) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 1.4: 'Kappe' des ersten Spielers 1
             if (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 4) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 1.5: 'Kappe' des ersten Spielers 1
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 5) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 1.6: 'Kappe' des ersten Spielers 1
-            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
-              print('Match found! (cap) ({},{})'.format(i,j))
+            if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
+              print('Match found! (test case 6) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.1: 'Kappe' des zweiten Spielers
             if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 7) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.2: 'Kappe' des zweiten Spielers
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 8 ) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.3: 'Kappe' des zweiten Spielers
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 9) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.4: 'Kappe' des zweiten Spielers
             if (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 10) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.5: 'Kappe' des zweiten Spielers
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+              print('Match found! (test case 11) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 2.6: 'Kappe' des zweiten Spielers
-            if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (cap) ({},{})'.format(i,j))
+            if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
+              print('Match found! (test case 12) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3: 'Pfeil' des ersten Spielers
-            if thisBoard.get_tile(i-1,j-1) == 1 & thisBoard.get_tile(i-1,j) == 1 & thisBoard.get_tile(i,j+1) == 1 & thisBoard.get_tile(i+1,j) == 2:
-              print('Match found! (arrow)')
+            # Muster 3.1: 'Pfeil' des ersten Spielers 1
+            if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 2):
+              print('Match found! (test case 13)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4: 'Pfeil' des zweiten Spielers
-            if thisBoard.get_tile(i,j-1) == 2 & thisBoard.get_tile(i+1,j) == 2 & thisBoard.get_tile(i+1,j+1) == 2 & thisBoard.get_tile(i-1,j) == 1:
-              print('Match found! (arrow)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer)     
-            # Muster 5: 'tote Brücke'
+            # Muster 3.2: 'Pfeil' des ersten Spielers 2
+            if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2):
+              print('Match found! (test case 14)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 3.3: 'Pfeil' des ersten Spielers 3
+            if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 2):
+              print('Match found! (test case 15)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 3.4: 'Pfeil' des ersten Spielers 4
+            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 2):
+              print('Match found! (test case 16)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 3.5: 'Pfeil' des ersten Spielers 5
+            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j-1) == 2):
+              print('Match found! (test case 17)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 3.6: 'Pfeil' des zweiten Spielers 6
+            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2):
+              print('Match found! (test case 18)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.1: 'Pfeil' des zweiten Spielers 1
+            if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 1):
+              print('Match found! (test case 19)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.2: 'Pfeil' des zweiten Spielers 2
+            if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j+1) == 1):
+              print('Match found! (test case 20)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.3: 'Pfeil' des zweiten Spielers 3
+            if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i,j+1) == 1):
+              print('Match found! (test case 21)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.4: 'Pfeil' des zweiten Spielers 4
+            if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 1):
+              print('Match found! (test case 22)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.5: 'Pfeil' des zweiten Spielers 5
+            if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j-1) == 1):
+              print('Match found! (test case 23)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 4.6: 'Pfeil' des zweiten Spielers 6
+            if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i,j-1) == 1):
+              print('Match found! (test case 24)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)  
+            # Muster 5.1: 'Fliege' 1
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2):
+              print('Match found! (test case 25)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 5.2: 'Fliege' 2
+            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
+              print('Match found! (test case 26)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 5.3: 'Fliege' 3
             if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j+1) == 2):
-              print('Match found! (dead bridge)')
+              print('Match found! (test case 27)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 5.4: 'Fliege' 4
+            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
+              print('Match found! (test case 28)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 5.5: 'Fliege' 5
+            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
+              print('Match found! (test case 29)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 5.6: 'Fliege' 6
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
+              print('Match found! (test case 30)')
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
             # Muster 6: am Rand, Steine links und oben links  
           if (i == xdim-1) & (j > 0):
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (self block on bottom edge) ({},{})'.format(i,j))
+              print('Match found! (test case 31)')
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
             # Muster 7: am Rand, Steine Links und rechts
           if (i == xdim-1) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (self sandwich on bottom edge) ({},{})'.format(i,j))
+              print('Match found! (test case 32)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 8: am Rand, Steine oben links and rechts
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (double block on bottom edge)({},{})'.format(i,j))
+              print('Match found! (test case 33)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
             # Muster 9: am Rand, Steine oben links und oben rechts
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (blocked by opponent on bottom edge)')
+              print('Match found! (test case 34)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 10: im Winkel
+            # Muster 10: im akuten Winkel
           if (i == xdim-1) & (j == ydim-1):
             if (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (corner block)')
+              print('Match found! (test case 35)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # am oberen Rand
             # Muster 11: am Rand, Steine rechts und unten rechts 
           if (i == 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (self block on top edge) ({},{})'.format(i,j))
+              print('Match found! (test case 36)')
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
             # Muster 12: am Rand, Steine Links und rechts
           if (i == 0) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (self sandwich on top edge) ({},{})'.format(i,j))
+              print('Match found! (test case 37)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)
             # Muster 13: am Rand, Steine unten rechts und links
-          if (i == 0) & (j > 0) & (j+1 < ydim):
+          if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (double block on top edge)({},{})'.format(i,j))
+              print('Match found! (test case 38)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
             # Muster 14: am oberen Rand, Steine unten links und unten rechts
-          if (i == 0) & (j > 0) & (j+1 < ydim):
+          if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (blocked by opponent on top edge)')
+              print('Match found! (test case 39)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 15: im Winkel
+            # Muster 15: im akuten Winkel
           if (i == 0) & (j == 0):
             if (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (top corner block)')
+              print('Match found! (test case 40)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # am linken Rand
+            # Muster 16: am Rand, Steine links und oben links  
+          if (i == xdim-1) & (j > 0):
+            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1):
+              print('Match found! (test case 41)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+            # Muster 17: am Rand, Steine Links und rechts
+          if (i == xdim-1) & (j > 0) & (j+1 < ydim):
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
+              print('Match found! (test case 42)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+            # Muster 18: am Rand, Steine oben links and rechts
+          if (i == xdim-1) & (j < ydim-1):
+            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
+              print('Match found! (test case 43)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)  
+            # Muster 19: am Rand, Steine oben links und oben rechts
+          if (i == xdim-1) & (j < ydim-1):
+            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
+              print('Match found! (test case 44)')
+              thisBoard.set_tile(i, j, self.simulatedPlayer)  
+            # Muster 20: im akuten Winkel
+          if (i == xdim-1) & (j == ydim-1):
+            if (thisBoard.get_tile(i,j-1) == 1):
+              print('Match found! (test case 45)')
               thisBoard.set_tile(i, j, self.simulatedPlayer)
         move = (0, 0)
         if thisBoard.get_tile(i,j) == self.currentPlayer:
