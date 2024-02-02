@@ -1,3 +1,6 @@
+# Teilnehmer: Hansen/Reschke
+# Parameter maxWaitTime kann reduziert werden, um schneller zu testen (mit möglicherweise entsprechend reduzierter Genauigkeit)
+
 from base_player import BasePlayer
 
 import numpy as np
@@ -9,9 +12,108 @@ import copy
 import pygame
 
 from hexgame import HexBoard
-from HexNode import HexNode
 from hexgame import HexGame
 from random_player import RandomPlayer
+
+class HexNode:
+    """
+    Class to represent a node in the Monte Carlo search tree.
+
+    The node contains a representation of the current board, as well as some other information about the state of the game and the search tree.
+
+    It also contains information about the value of the node in Monte Carlo tree search.
+    """
+    def __init__(self, board, current_player):
+        self.parent = None
+        self.children = list()
+        self.UCTScore = 1
+        self.thisBoard = board
+        self.numberOfVisits = 0
+        self.numberOfWins = 0
+        self.currentPlayer = current_player
+        self.lastMove = (0,0)
+        self.AMAFNumberOfVisits = 0
+        self.AMAFNumberOfWins = 0
+
+    def setParent(self, node):
+        self.parent = node
+
+    def getParent(self):
+        return self.parent
+
+    def addChild(self, node):
+        self.children.append(node)
+
+    def getBoard(self):
+        return self.thisBoard
+    
+    def getDiscountedUCTScore(self):
+      """
+      Returns the UCT score of the current node discounted by a factor which depends on the number of UCT visits.
+
+      More visits results in a higher score.
+
+      This is useful for RAVE evaluation where the number of UCT visits to the best node may be small.
+      """
+      decayFactor = 3
+      return self.UCTScore - ((1 / (1 + decayFactor * np.log(np.maximum(self.numberOfVisits,1)))) * self.UCTScore)
+    
+    def getUCTScore(self):
+        return self.UCTScore
+    
+    def getUCTVisits(self):
+        return self.numberOfVisits
+    
+    def getAMAFVisits(self):
+        return self.AMAFNumberOfVisits
+    
+    def getCurrentPlayer(self):
+        return self.currentPlayer
+    
+    def updateUCT(self, result):
+        if result:
+            self.numberOfWins += 1
+        self.numberOfVisits += 1
+        self.UCTScore = self.numberOfWins / self.numberOfVisits
+
+    def updateAMAF(self, result):
+        if result:
+            self.AMAFNumberOfWins += 1
+        self.AMAFNumberOfVisits += 1
+
+    def getRAVEScore(self):
+        """
+        Returns the RAVE score of the current node. The RAVE score is a combination of the AMAF and UCT win ratios. The exact score depends on the weighting factor, which decays
+        proportional to the number of UCT visits. This means that the more the node is chosen first (rather than as a later AMAF move) the more confidence the algorithm places on 
+        the UCT estimate.
+        """
+        explorationConstant = 3
+        AMAFWeightingFactor = self.calculateAMAFWeightingFactor()
+        return (self.UCTScore + explorationConstant * np.sqrt(np.log(np.maximum(self.parent.getUCTVisits(),1) / np.maximum(self.numberOfVisits,1))) * (1 - AMAFWeightingFactor) + (self.AMAFNumberOfWins / np.maximum(self.AMAFNumberOfVisits,1)) * AMAFWeightingFactor)
+
+    def numberOfChildren(self):
+        return len(self.children)
+    
+    def calculateAMAFWeightingFactor(self):
+        """
+        Calculates and returns the AMAF weighting factor. This decreases with increasing number of visits.
+
+        This means that the second term in the RAVE score, which is the product of this factor with the AMAF win ratio, also decreases in importance relative to the first term.
+        """
+        equivalenceParameter = 10
+        return np.sqrt(equivalenceParameter / ((3 * self.numberOfVisits) + equivalenceParameter))
+    
+    def setUCTScore(self, val):
+        self.UCTScore = val
+
+    def setAMAFWins(self, val):
+        self.AMAFNumberOfWins = val
+
+    def getLastMove(self):
+        return self.lastMove
+    
+    def setLastMove(self, tup):
+        self.lastMove = tup
 
 class MCPlayer(BasePlayer):
   def __init__(self, swap_fun=lambda board, *args: False):
@@ -20,11 +122,16 @@ class MCPlayer(BasePlayer):
     self._swap_fun = swap_fun
     self.searchTree = list()
     self.threshhold = 3
-    self.turnLimit = 50000
-    self.maxWaitTime = 45
-    self.totalMoveCount = 0
+    self.turnLimit = 100000
+    self.maxWaitTime = 27
     self.thisBoard = None
-    self.searchNumber = 50
+    self.searchNumber = 100
+    self.lastMove = (0,0)
+    # Not necessary for puzzles
+    self.useInfill = False
+    # RAVE and attention do not currently add much value. I would like to try adjusting the parameters before the tournament.
+    self.useRAVE = False
+    self.useAttention = False
 
   def claim_swap(self, board, *args) -> bool:
     """
@@ -44,13 +151,12 @@ class MCPlayer(BasePlayer):
 
     """
 
-
     """
     Based on known winning/losing positions from existing research. Swaps if the opponent's first move is to a known winning tile.
     """
     res = False
-    self.currentPlayer = 2
-    self.simulatedPlayer = self.currentPlayer
+    #self.currentPlayer = 2
+    #self.simulatedPlayer = self.currentPlayer
     (xdim, ydim) = board.dim()
     x5Positions = [(0,3),(0,4),(1,1),(1,2),(1,3),(2,1),(2,2),(2,3),(3,1),(3,2),(3,3),(4,0),(4,1)]
     x7Positions = [(0,3),(0,5),(0,6),(1,2),(1,3),(1,4),(1,5),(2,1),(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(4,1),(4,2),(4,3),(4,4),(4,5),(5,1),(5,2),(5,3),(5,4),(6,0),(6,1),(6,3)]
@@ -82,6 +188,7 @@ class MCPlayer(BasePlayer):
       for j in range(ydim):
         if ((i, j) in positions) and (board.get_tile(i, j) == 3 - self.currentPlayer):
           res = True
+          self.lastMove = (i,j)
     return res
 
   def choose_tile(self, board, *args) -> tuple:
@@ -94,6 +201,8 @@ class MCPlayer(BasePlayer):
     of all visited nodes.
 
     The final choice is the child node with the best UCT score, that is, the largest proportion of wins in the Monte Carlo simulations.
+
+    If there are multiple moves with the best UCT score, choose one that completes an existing virtual connection.
 
     Parameters
     ----------
@@ -110,13 +219,19 @@ class MCPlayer(BasePlayer):
     """
     (xdim, ydim) = board.dim()
     newMove = BasePlayer.random_choice(board, *args)
+    self.currentPlayer = self.get_id()
+    self.simulatedPlayer = self.get_id()
 
     thisBoard = board
-    simulatedBoard = self.InfillBoardState(thisBoard)
+
+    if self.useInfill:
+      thisBoard = self.InfillBoardState(thisBoard)
+
     currentBoardState = HexNode(thisBoard, self.currentPlayer)
+    currentBoardState.setLastMove(self.lastMove)
     """
-      First: Produce a list of all possible moves. Check whether a win is possible.
-     """
+    First: Produce a list of all possible moves. Check whether a win is possible. If it's possible to immediately win, take this move.
+    """
     validMoves = list()
     for i in range(xdim):
       for j in range(ydim):
@@ -132,9 +247,16 @@ class MCPlayer(BasePlayer):
       newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
       if (newGame.check_finish() == self.currentPlayer):
         return move
+
     """
-      If no win is possible: Carry out the Monte Carlo tree search until time runs out.
-     """  
+    Produce a list of all incomplete bridges.
+    """
+    virtualConnections = self.calculateAllBridges(thisBoard)
+    #print('Bridges for current player: {}'.format(virtualConnections))
+
+    """
+    Carry out the Monte Carlo tree search until time runs out.
+    """  
     elapsed = 0
     start = None
     for n in range(self.turnLimit):
@@ -147,12 +269,21 @@ class MCPlayer(BasePlayer):
           start = time.time()
     visitedNodes = list()
     """
-      Examine all children of the current node and choose the one with the best UCT score. This is the next move.
-     """  
+    Examine all children of the current node and choose the one with the best UCT score. This is the next move.
+
+    If there is a move with UCT score 1, prefer to complete an existing virtual connection (as determined by bridge templates).
+
+    This is useful because the solver normally cannot otherwise distinguish between moves with UCT score 1.
+    Hence given a game state with a guaranteed win it is indifferent between all moves.
+    """  
     if currentBoardState.children:
       maxUCTScore = -1
       for child in currentBoardState.children:
-        if child.getUCTScore() > maxUCTScore:
+        if ((child.getUCTScore() > 0.9999) & (child.getLastMove() in virtualConnections)):
+          bestChild = child
+          #print('Bridge with UCT score 1 found at: {}'.format(child.getLastMove()))
+          break
+        if (child.getUCTScore() > maxUCTScore):
           maxUCTScore = child.getUCTScore()
           bestChild = child
       visitedNodes.append(currentBoardState)
@@ -161,7 +292,7 @@ class MCPlayer(BasePlayer):
         for j in range(ydim):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
-            print('Current player: {}. Zug: {} mit UCT-Wert: {}'.format(self.currentPlayer, newMove, maxUCTScore))
+            print('Current player: {}. We played: {}. This move had total UCT score {} and RAVE score {} with {} UCT visits and {} AMAF visits.'.format(self.currentPlayer, newMove, newBoardState.getUCTScore(), newBoardState.getRAVEScore(), newBoardState.getUCTVisits(), newBoardState.getAMAFVisits()))
     return newMove
   
   def CarryOutSearch(self, baseNode):
@@ -183,42 +314,67 @@ class MCPlayer(BasePlayer):
     thisNode = baseNode
     visitedNodes = list()
     visitedNodes.append(thisNode)
+    siblingsOfVisitedNodes = list()
+    siblingsOfVisitedNodes.append(thisNode)
+    (xdim, ydim) = thisNode.getBoard().dim()
 
     """
     Choose the best child of the current node. In general, we choose the child with the highest UCT score, but sometimes choose randomly to allow for exploration.
     """
-    while thisNode.children:
-      if (thisNode.getCurrentPlayer() == self.currentPlayer):
-        maxUCTScore = -1
-        for child in thisNode.children:
-          if child.getUCTScore() > maxUCTScore:
-            maxUCTScore = child.getUCTScore()
-            bestChild = child
-        if (random.uniform(0,1) < 0.05):
-          thisNode = random.choice(thisNode.children)
-        else:
+    if (self.useRAVE == False):
+      while thisNode.children:
+        if (thisNode.getCurrentPlayer() == self.currentPlayer):
+          maxUCTScore = -1
+          for child in thisNode.children:
+            if child.getUCTScore() > maxUCTScore:
+              maxUCTScore = child.getUCTScore()
+              bestChild = child
+          if (random.uniform(0,1) < 0.05):
+            thisNode = random.choice(thisNode.children)
+          else:
+            thisNode = bestChild
+        elif (thisNode.getCurrentPlayer() == 3 - self.currentPlayer):
+          minUCTScore = 2
+          for child in thisNode.children:
+            if child.getUCTScore() < minUCTScore:
+              minUCTScore = child.getUCTScore()
+              bestChild = child
+          if (random.uniform(0,1) < 0.05):
+            thisNode = random.choice(thisNode.children)
+          else:
+            thisNode = bestChild
+        visitedNodes.append(thisNode)
+    else:
+      while thisNode.children:
+        if (thisNode.getCurrentPlayer() == self.currentPlayer):
+          maxRAVEScore = -1
+          bestChild = random.choice(thisNode.children)
+          for child in thisNode.children:
+            siblingsOfVisitedNodes.append(child)
+            if child.getRAVEScore() > maxRAVEScore:
+              maxUCTScore = child.getUCTScore()
+              bestChild = child
           thisNode = bestChild
-      elif (thisNode.getCurrentPlayer() == 3 - self.currentPlayer):
-        minUCTScore = 2
-        for child in thisNode.children:
-          if child.getUCTScore() < minUCTScore:
-            minUCTScore = child.getUCTScore()
-            bestChild = child
-        if (random.uniform(0,1) < 0.05):
-          thisNode = random.choice(thisNode.children)
-        else:
+        elif (thisNode.getCurrentPlayer() == 3 - self.currentPlayer):
+          minRAVEScore = 2
+          bestChild = random.choice(thisNode.children)
+          for child in thisNode.children:
+            if child.getRAVEScore() < minRAVEScore:
+              minRAVEScore = child.getRAVEScore()
+              bestChild = child
           thisNode = bestChild
-      visitedNodes.append(thisNode)
+        visitedNodes.append(thisNode)      
     """
-    Upon reaching a leaf, we carry out a simulation and update the UCT scores of all traversed nodes.
+    Upon reaching a leaf, we carry out a simulation and update the UCT scores of all traversed nodes. If RAVE is enabled, we update the RAVE scores of all siblings.
+
+    While updating the UCT scores we also create new child nodes for any node with a number of visits reaching the threshhold.
     """
-    winner = self.CarryOutSimulation(thisNode)
+    (winner, simulatedBoard) = self.CarryOutSimulation(thisNode)
     result = (winner == self.currentPlayer)
     for node in visitedNodes:
         node.updateUCT(result)
         nodeBoard = node.getBoard()
-        if node.numberOfVisits == self.threshhold:
-            (xdim, ydim) = nodeBoard.dim()
+        if (node.numberOfVisits == self.threshhold):
             for i in range(xdim):
                 for j in range(ydim):
                     if nodeBoard.get_tile(i, j) == 0:
@@ -227,9 +383,18 @@ class MCPlayer(BasePlayer):
                         newChild = HexNode(newBoard, 3 - node.getCurrentPlayer())
                         if not (newChild.getCurrentPlayer() == self.currentPlayer):
                           newChild.setUCTScore(0)
+                          newChild.setAMAFWins(0)
+                        lastMove = (i,j)
+                        newChild.setLastMove(lastMove)
                         self.searchTree.append(newChild)
                         newChild.setParent(thisNode)
                         node.addChild(newChild)
+    if (self.useRAVE == True):
+      for node in siblingsOfVisitedNodes:
+        for i in range(xdim):
+          for j in range(ydim):
+            if (simulatedBoard.get_tile(i,j) == self.currentPlayer) and (node.getBoard().get_tile(i,j) == self.currentPlayer):
+              node.updateAMAF(result)
 
   def CarryOutSimulation(self, thisNode):
     """
@@ -255,10 +420,16 @@ class MCPlayer(BasePlayer):
           validMoves.append(newMove)
     """
     Play all possible moves in order, alternating between players. Use the analyzeMoves function to choose the next move.
+
+    The attention mechanic is a heuristic which penalizes moves too far from the last move played. Move with a low attention score may be randomly rerolled.
     """
     while validMoves:
-      (moves, threatenedBridgePresent) = self.analyzeMoves(simulatedBoard)
-      nextMove = random.choice(moves)
+      nextMove = self.analyzeMoves(simulatedBoard)
+      if (self.useAttention == True):
+        attentionDecayFactor = self.calculateAttentionLoss(thisNode.getLastMove(), nextMove)
+        while (random.uniform(0,1) > (1 - attentionDecayFactor)):
+          nextMove = self.analyzeMoves(simulatedBoard)
+          attentionDecayFactor = self.calculateAttentionLoss(thisNode.getLastMove(), nextMove)
       if nextMove:
         (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
@@ -269,11 +440,11 @@ class MCPlayer(BasePlayer):
     dummy_player1 = RandomPlayer()
     dummy_player2 = RandomPlayer()
     newGame = HexGame(simulatedBoard.board, dummy_player1, dummy_player2)
-    return newGame.check_finish()
+    return (newGame.check_finish(), simulatedBoard)
   
   def analyzeMoves(self, board):
     """
-    Carries out a single Monte Carlo simulation.
+    Chooses from among the available moves. Use a mix of heuristics and chance selection.
 
     Parameters
     ----------
@@ -285,11 +456,19 @@ class MCPlayer(BasePlayer):
     """
 
     """
-    Use the savebridge heuristic as described in the MoHex paper. If a move of the opposing player threatens a bridge, play into the open space to form a connection.
+    Use two heuristics to navigate playouts: savebridge and breakbridge.
+
+    Savebridge: If a move of the opposing player threatens a bridge, play into the open space to form a connection.
+
+    Breakbridge: If a move of the opposing player leaves a bridge threatened, play into the open space to break the virtual connection.
+
+    If these two templates don't apply, choose randomly from among the remaining moves.
     """
     (xdim, ydim) = board.dim()
-    threatenedTiles = list()
+    threatenedBridges = list()
+    breakableBridges = list()
     emptyTiles = list()
+    #print('New simulation')
     for i in range(xdim):
       for j in range(ydim):
         if (board.get_tile(i,j) == self.simulatedPlayer):
@@ -298,367 +477,580 @@ class MCPlayer(BasePlayer):
             if (board.get_tile(i-1,j+2) == self.simulatedPlayer):
               if (board.get_tile(i-1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
                 move = (i,j+1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
               if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
                 move = (i-1,j+1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
           # Fall 2: Brücke rechts unten
           if (i+1 < xdim) & (j+1 < ydim):
             if (board.get_tile(i+1,j+1) == self.simulatedPlayer):
               if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
                 move = (i+1,j)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
               if (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
                 move = (i,j+1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
           # Fall 3: Brücke lotrecht oben
           if (i-1 > 0) & (j+1 < ydim):
             if (board.get_tile(i-2,j+1) == self.simulatedPlayer):
               if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
                 move = (i-1,j+1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
               if (board.get_tile(i-1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
                 move = (i-1,j)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             # Fall 4: Am unteren Rand
-          if (i == xdim - 2) & (j > 0) & (self.currentPlayer == 1):
+          if (i == xdim - 2) & (j > 0) & (self.simulatedPlayer == 1):
             if (board.get_tile(i+1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j-1) == 0):
                 move = (i+1,j-1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             if (board.get_tile(i+1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
                 move = (i+1,j)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             # Fall 5: Am oberen Rand
-          if (i == 1) & (j < ydim - 1) & (self.currentPlayer == 1):
-            if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j-1) == 0):
-                move = (i+1,j-1)
-                threatenedTiles.append(move)
-            if (board.get_tile(i+1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
+          if (i == 1) & (j < ydim - 1) & (self.simulatedPlayer == 1):
+            if (board.get_tile(i-1,j) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
+            if (board.get_tile(i-1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
                 move = (i-1,j)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             # Fall 6: Am linken Rand
-          if (i < xdim - 1) & (j == 1) & (self.currentPlayer == 2):
+          if (i < xdim - 1) & (j == 1) & (self.simulatedPlayer == 2):
             if (board.get_tile(i+1,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
                 move = (i,j-1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             if (board.get_tile(i,j-1) == 3 - self.simulatedPlayer) & (board.get_tile(i+1,j-1) == 0):
                 move = (i+1,j-1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             # Fall 7: Am rechten Rand
-          if (i > 0) & (j == ydim - 2) & (self.currentPlayer == 2):
+          if (i > 0) & (j == ydim - 2) & (self.simulatedPlayer == 2):
             if (board.get_tile(i-1,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
                 move = (i,j+1)
-                threatenedTiles.append(move)
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
             if (board.get_tile(i,j+1) == 3 - self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
                 move = (i-1,j+1)
-                threatenedTiles.append(move)
-        elif board.get_tile(i,j) == 0:
+                #print('Found threatened bridge')
+                threatenedBridges.append(move)
+        if (board.get_tile(i,j) == (3 - self.simulatedPlayer)):
+          # Fall 1: Brücke rechts oben
+          if (i-1 > 0) & (j+2 < ydim):
+            if (board.get_tile(i-1,j+2) == (3 - self.simulatedPlayer)):
+              if (board.get_tile(i-1,j+1) == self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                breakableBridges.append(move)
+              if (board.get_tile(i,j+1) == self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                breakableBridges.append(move)
+          # Fall 2: Brücke rechts unten
+          if (i+1 < xdim) & (j+1 < ydim):
+            if (board.get_tile(i+1,j+1) == (3 - self.simulatedPlayer)):
+              if (board.get_tile(i,j+1) == self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                breakableBridges.append(move)
+              if (board.get_tile(i+1,j) == self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                breakableBridges.append(move)
+          # Fall 3: Brücke lotrecht oben
+          if (i-1 > 0) & (j+1 < ydim):
+            if (board.get_tile(i-2,j+1) == (3 - self.simulatedPlayer)):
+              if (board.get_tile(i-1,j) == self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                breakableBridges.append(move)
+              if (board.get_tile(i-1,j+1) == self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                breakableBridges.append(move)
+          # Fall 4: Am unteren Rand
+          if (i == xdim - 2) & (j > 0) & (self.simulatedPlayer == 2):
+            if (board.get_tile(i+1,j) == self.simulatedPlayer) & (board.get_tile(i+1,j-1) == 0):
+                move = (i+1,j-1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+            if (board.get_tile(i+1,j-1) == self.simulatedPlayer) & (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+          # Fall 5: Am oberen Rand
+          if (i == 1) & (j < ydim - 1) & (self.simulatedPlayer == 2):
+            if (board.get_tile(i-1,j) == self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
+                move = (i+1,j-1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+            if (board.get_tile(i-1,j+1) == self.simulatedPlayer) & (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+          # Fall 6: Am linken Rand
+          if (i < xdim - 1) & (j == 1) & (self.simulatedPlayer == 1):
+            if (board.get_tile(i+1,j-1) == self.simulatedPlayer) & (board.get_tile(i,j-1) == 0):
+                move = (i,j-1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+            if (board.get_tile(i,j-1) == self.simulatedPlayer) & (board.get_tile(i+1,j-1) == 0):
+                move = (i+1,j-1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+          # Fall 7: Am rechten Rand
+          if (i > 0) & (j == ydim - 2) & (self.simulatedPlayer == 1):
+            if (board.get_tile(i-1,j+1) == self.simulatedPlayer) & (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+            if (board.get_tile(i,j+1) == self.simulatedPlayer) & (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                #print('Found threatened bridge')
+                breakableBridges.append(move)
+        elif (board.get_tile(i,j) == 0):
           move = (i,j)
           emptyTiles.append(move)
     """
     If at least one threatened bridge was found, choose randomly from the moves which save one of these bridges.
 
     Otherwise, choose randomly from among all other valid moves.
+
+    If attention is used, rechoose with probability equal to the decay factor.
     """
-    if threatenedTiles:
-      return (threatenedTiles, True)
+    if threatenedBridges:
+      return random.choice(threatenedBridges)
+    elif breakableBridges:
+      return random.choice(breakableBridges)
     elif emptyTiles:
-      return (emptyTiles, False)
+      return random.choice(emptyTiles)
     else:
       return None
     
+  def calculateAllBridges(self, board):
+    """
+    Find all bridges which could be completed by the current player.
+
+    Parameters
+    ----------
+    board: The current state of the board.
+    
+    Returns
+    -------
+    virtualConnections: List of all uncompleted bridges on the board.
+    """
+
+    """
+    Similar to analyzeMoves with the distinction that the bridge must not be threatened, and that all virtual connections are returned.
+    """
+    (xdim, ydim) = board.dim()
+    virtualConnections = list()
+    for i in range(xdim):
+      for j in range(ydim):
+        if (board.get_tile(i,j) == self.currentPlayer):
+          # Fall 1: Brücke rechts oben
+          if (i-1 > 0) & (j+2 < ydim):
+            if (board.get_tile(i-1,j+2) == self.currentPlayer):
+              if (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                virtualConnections.append(move)
+              if (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                virtualConnections.append(move)
+          # Fall 2: Brücke rechts unten
+          if (i+1 < xdim) & (j+1 < ydim):
+            if (board.get_tile(i+1,j+1) == self.currentPlayer):
+              if (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                virtualConnections.append(move)
+              if (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                virtualConnections.append(move)
+          # Fall 3: Brücke lotrecht oben
+          if (i-1 > 0) & (j+1 < ydim):
+            if (board.get_tile(i-2,j+1) == self.simulatedPlayer):
+              if (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                virtualConnections.append(move)
+              if (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                virtualConnections.append(move)
+            # Fall 4: Am unteren Rand
+          if (i == xdim - 2) & (j > 0) & (self.simulatedPlayer == 1):
+            if (board.get_tile(i+1,j-1) == 0):
+                move = (i+1,j-1)
+                virtualConnections.append(move)
+            if (board.get_tile(i+1,j) == 0):
+                move = (i+1,j)
+                virtualConnections.append(move)
+            # Fall 5: Am oberen Rand
+          if (i == 1) & (j < ydim - 1) & (self.simulatedPlayer == 1):
+            if (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                virtualConnections.append(move)
+            if (board.get_tile(i-1,j) == 0):
+                move = (i-1,j)
+                virtualConnections.append(move)
+            # Fall 6: Am linken Rand
+          if (i < xdim - 1) & (j == 1) & (self.simulatedPlayer == 2):
+            if (board.get_tile(i,j-1) == 0):
+                move = (i,j-1)
+                virtualConnections.append(move)
+            if (board.get_tile(i+1,j-1) == 0):
+                move = (i+1,j-1)
+                virtualConnections.append(move)
+            # Fall 7: Am rechten Rand
+          if (i > 0) & (j == ydim - 2) & (self.simulatedPlayer == 2):
+            if (board.get_tile(i,j+1) == 0):
+                move = (i,j+1)
+                virtualConnections.append(move)
+            if (board.get_tile(i-1,j+1) == 0):
+                move = (i-1,j+1)
+                virtualConnections.append(move)
+    return virtualConnections
+    
   def InfillBoardState(self, board):
-    print('Calculating infill...')
+    """
+    Use patterns to compute dead cells. Dead cells are cells which have no impact on the game and hence can be set to either color.
+
+    Parameters
+    ----------
+    board: The current state of the board.
+    
+    Returns
+    -------
+    thisBoard: 'Infilled' hex board --- copy of the current board with dead cells filled by one of the two players.
+    """
+    #print('Calculating infill...')
+    infilledTiles = list()
     thisBoard = copy.deepcopy(board)
     (xdim, ydim) = thisBoard.dim()
     for i in range(xdim):
       for j in range(ydim):
         if thisBoard.get_tile(i,j) == 0:
           if (i > 0) & (j > 0) & (i + 1 < xdim) & (j + 1 < ydim):
-            # Muster 1.1: 'Kappe' des ersten Spielers
+            # Muster 1.1: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 1) ({},{})'.format(i,j))
+              #print('Match found! (test case 1) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 1.2: 'Kappe' des ersten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 1.2: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1):
-              print('Match found! (test case 2) ({},{})'.format(i,j))
+              #print('Match found! (test case 2) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 1.3: 'Kappe' des ersten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 1.3: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1):
-              print('Match found! (test case 3) ({},{})'.format(i,j))
+              #print('Match found! (test case 3) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 1.4: 'Kappe' des ersten Spielers 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 1.4: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 4) ({},{})'.format(i,j))
+              #print('Match found! (test case 4) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 1.5: 'Kappe' des ersten Spielers 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 1.5: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1):
-              print('Match found! (test case 5) ({},{})'.format(i,j))
+              #print('Match found! (test case 5) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 1.6: 'Kappe' des ersten Spielers 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 1.6: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
-              print('Match found! (test case 6) ({},{})'.format(i,j))
+              #print('Match found! (test case 6) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.1: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.1: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
-              print('Match found! (test case 7) ({},{})'.format(i,j))
+              #print('Match found! (test case 7) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.2: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.2: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2):
-              print('Match found! (test case 8 ) ({},{})'.format(i,j))
+              #print('Match found! (test case 8 ) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.3: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.3: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (test case 9) ({},{})'.format(i,j))
+              #print('Match found! (test case 9) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.4: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.4: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2):
-              print('Match found! (test case 10) ({},{})'.format(i,j))
+              #print('Match found! (test case 10) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.5: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.5: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
-              print('Match found! (test case 11) ({},{})'.format(i,j))
+              #print('Match found! (test case 11) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 2.6: 'Kappe' des zweiten Spielers
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 2.6: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (test case 12) ({},{})'.format(i,j))
+              #print('Match found! (test case 12) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.1: 'Pfeil' des ersten Spielers 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.1: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 2):
-              print('Match found! (test case 13)')
+              #print('Match found! (test case 13) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.2: 'Pfeil' des ersten Spielers 2
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.2: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (test case 14)')
+              #print('Match found! (test case 14) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.3: 'Pfeil' des ersten Spielers 3
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.3: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 2):
-              print('Match found! (test case 15)')
+              #print('Match found! (test case 15) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.4: 'Pfeil' des ersten Spielers 4
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.4: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 2):
-              print('Match found! (test case 16)')
+              #print('Match found! (test case 16) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.5: 'Pfeil' des ersten Spielers 5
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.5: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (test case 17)')
+              #print('Match found! (test case 17) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 3.6: 'Pfeil' des zweiten Spielers 6
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 3.6: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2):
-              print('Match found! (test case 18)')
+              #print('Match found! (test case 18) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.1: 'Pfeil' des zweiten Spielers 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.1: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 1):
-              print('Match found! (test case 19)')
+              #print('Match found! (test case 19) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.2: 'Pfeil' des zweiten Spielers 2
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.2: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j+1) == 1):
-              print('Match found! (test case 20)')
+              #print('Match found! (test case 20) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.3: 'Pfeil' des zweiten Spielers 3
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.3: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 21)')
+              #print('Match found! (test case 21) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.4: 'Pfeil' des zweiten Spielers 4
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.4: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 1):
-              print('Match found! (test case 22)')
+              #print('Match found! (test case 22) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.5: 'Pfeil' des zweiten Spielers 5
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.5: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j-1) == 1):
-              print('Match found! (test case 23)')
+              #print('Match found! (test case 23) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 4.6: 'Pfeil' des zweiten Spielers 6
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 4.6: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 24)')
+              #print('Match found! (test case 24) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 5.1: 'Fliege' 1
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.1: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2):
-              print('Match found! (test case 25)')
+              #print('Match found! (test case 25) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 5.2: 'Fliege' 2
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.2: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (test case 26)')
+              #print('Match found! (test case 26) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 5.3: 'Fliege' 3
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.3: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j+1) == 2):
-              print('Match found! (test case 27)')
+              #print('Match found! (test case 27) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 5.4: 'Fliege' 4
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.4: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
-              print('Match found! (test case 28)')
+              #print('Match found! (test case 28) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 5.5: 'Fliege' 5
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.5: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
-              print('Match found! (test case 29)')
+              #print('Match found! (test case 29) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 5.6: 'Fliege' 6
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 5.6: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
-              print('Match found! (test case 30)')
+              #print('Match found! (test case 30) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 6: am Rand, Steine links und oben links  
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 6: tiles directly and above left (edge pattern)  
           if (i == xdim-1) & (j > 0):
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 31)')
+              #print('Match found! (test case 31) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 7: am Rand, Steine Links und rechts
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 7: tiles to both sides (edge pattern)
           if (i == xdim-1) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 32)')
+              #print('Match found! (test case 32) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 8: am Rand, Steine oben links and rechts
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 8: tiles above left and directly right (edge pattern)
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 33)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 9: am Rand, Steine oben links und oben rechts
+              #print('Match found! (test case 33) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 9: tiles above and to both sides
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (test case 34)')
+              #print('Match found! (test case 34) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 10: im akuten Winkel
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 10: acute corner killed by single tile
           if (i == xdim-1) & (j == ydim-1):
             if (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 35)')
+              #print('Match found! (test case 35) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # am oberen Rand
-            # Muster 11: am Rand, Steine rechts und unten rechts 
+              move = (i,j)
+              infilledTiles.append(move)
+            # upper edge patterns
+            # Muster 11: tiles directly and below right (edge pattern)
           if (i == 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 36)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 12: am Rand, Steine Links und rechts
+              #print('Match found! (test case 36) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 12: tiles to both sides (edge pattern)
           if (i == 0) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 37)')
+              #print('Match found! (test case 37) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 13: am Rand, Steine unten rechts und links
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 13: tiles directly to the left and below to the right (edge pattern)
           if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 38)')
+              #print('Match found! (test case 38) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 14: am oberen Rand, Steine unten links und unten rechts
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 14: tiles below to the left and right
           if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
-              print('Match found! (test case 39)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 15: im akuten Winkel
+              #print('Match found! (test case 39) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 15: acute corner killed by single tile
           if (i == 0) & (j == 0):
             if (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 40)')
+              #print('Match found! (test case 40) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # am linken Rand
-            # Muster 16: am Rand, Steine links und oben links  
-          if (i == xdim-1) & (j > 0):
-            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 41)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer) 
-            # Muster 17: am Rand, Steine Links und rechts
-          if (i == xdim-1) & (j > 0) & (j+1 < ydim):
-            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 42)')
+              move = (i,j)
+              infilledTiles.append(move)
+            # left edge patterns
+            # Muster 16: counterpart to (6) on the left edge
+          if (i < xdim - 1) & (j == 0):
+            if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2):
+              #print('Match found! (test case 41) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-            # Muster 18: am Rand, Steine oben links and rechts
-          if (i == xdim-1) & (j < ydim-1):
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 17: counterpart to (7) on the left edge
+          if (i > 0) & (j == 0):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
-              print('Match found! (test case 43)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 19: am Rand, Steine oben links und oben rechts
-          if (i == xdim-1) & (j < ydim-1):
-            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
-              print('Match found! (test case 44)')
-              thisBoard.set_tile(i, j, self.simulatedPlayer)  
-            # Muster 20: im akuten Winkel
-          if (i == xdim-1) & (j == ydim-1):
-            if (thisBoard.get_tile(i,j-1) == 1):
-              print('Match found! (test case 45)')
+              #print('Match found! (test case 42) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-        move = (0, 0)
-        if thisBoard.get_tile(i,j) == self.currentPlayer:
-          # Fall 1: Brücke rechts oben
-          if (i-1 > 0) & (j+2 < ydim):
-            if (board.get_tile(i-1,j+2) == self.currentPlayer):
-              if (board.get_tile(i-1,j+1) == 3 - self.currentPlayer) & (board.get_tile(i,j+1) == 0):
-                move = (i,j+1)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i,j+1) == 3 - self.currentPlayer) & (board.get_tile(i-1,j+1) == 0):
-                move = (i-1,j+1)
-                print('Threatened bridge found: {}'.format(move))
-          # Fall 2: Brücke rechts unten
-          if (i+1 < xdim) & (j+1 < ydim):
-            if (board.get_tile(i+1,j+1) == self.currentPlayer):
-              if (board.get_tile(i,j+1) == 3 - self.currentPlayer) & (board.get_tile(i+1,j) == 0):
-                move = (i+1,j)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i+1,j) == 3 - self.currentPlayer) & (board.get_tile(i,j+1) == 0):
-                move = (i,j+1)
-                print('Threatened bridge found: {}'.format(move))
-          # Fall 3: Brücke lotrecht oben
-          if (i-1 > 0) & (j+1 < ydim):
-            if (board.get_tile(i-2,j+1) == self.currentPlayer):
-              if (board.get_tile(i-1,j) == 3 - self.currentPlayer) & (board.get_tile(i-1,j+1) == 0):
-                move = (i-1,j+1)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i-1,j+1) == 3 - self.currentPlayer) & (board.get_tile(i-1,j) == 0):
-                move = (i-1,j)
-                print('Threatened bridge found: {}'.format(move))
-            # Fall 4: Am unteren Rand
-          if (i == xdim - 2) & (j > 0) & (self.currentPlayer == 1):
-            if (board.get_tile(i+1,j) == 3 - self.currentPlayer) & (board.get_tile(i+1,j-1) == 0):
-                move = (i+1,j-1)
-                print('Threatened bridge found: {}'.format(move))
-            if (board.get_tile(i+1,j-1) == 3 - self.currentPlayer) & (board.get_tile(i+1,j) == 0):
-                move = (i+1,j)
-                print('Threatened bridge found: {}'.format(move))
-            # Fall 5: Am oberen Rand
-          if (i == 1) & (j < ydim - 1) & (self.currentPlayer == 1):
-            if (board.get_tile(i-1,j) == 3 - self.currentPlayer) & (board.get_tile(i+1,j-1) == 0):
-                move = (i+1,j-1)
-                print('Threatened bridge found: {}'.format(move))
-            if (board.get_tile(i+1,j-1) == 3 - self.currentPlayer) & (board.get_tile(i-1,j) == 0):
-                move = (i-1,j)
-                print('Threatened bridge found: {}'.format(move))
-            # Fall 6: Am linken Rand
-          if (i < xdim - 1) & (j == 1) & (self.currentPlayer == 2):
-            if (board.get_tile(i+1,j-1) == 3 - self.currentPlayer) & (board.get_tile(i,j-1) == 0):
-                move = (i,j-1)
-                print('Threatened bridge found: {}'.format(move))
-            if (board.get_tile(i,j-1) == 3 - self.currentPlayer) & (board.get_tile(i+1,j-1) == 0):
-                move = (i+1,j-1)
-                print('Threatened bridge found: {}'.format(move))
-            # Fall 7: Am rechten Rand
-          if (i > 0) & (j == ydim - 2) & (self.currentPlayer == 2):
-            if (board.get_tile(i-1,j+1) == 3 - self.currentPlayer) & (board.get_tile(i,j+1) == 0):
-                move = (i,j+1)
-                print('Threatened bridge found: {}'.format(move))
-            if (board.get_tile(i,j+1) == 3 - self.currentPlayer) & (board.get_tile(i-1,j+1) == 0):
-                move = (i-1,j+1)
-                print('Threatened bridge found: {}'.format(move))
-        elif thisBoard.get_tile(i,j) == 3 - self.currentPlayer:
-          # Fall 1: Brücke rechts oben
-          if (i-1 > 0) & (j+2 < ydim):
-            if (board.get_tile(i-1,j+2) == 3 - self.currentPlayer):
-              if (board.get_tile(i-1,j+1) == self.currentPlayer) & (board.get_tile(i,j+1) == 0):
-                move = (i,j+1)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i,j+1) == self.currentPlayer) & (board.get_tile(i-1,j+1) == 0):
-                move = (i-1,j+1)
-                print('Threatened bridge found: {}'.format(move))
-          # Fall 2: Brücke rechts unten
-          if (i+1 < xdim) & (j+1 < ydim):
-            if (board.get_tile(i+1,j+1) == 3 - self.currentPlayer):
-              if (board.get_tile(i,j+1) == self.currentPlayer) & (board.get_tile(i+1,j) == 0):
-                move = (i+1,j)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i+1,j) == self.currentPlayer) & (board.get_tile(i,j+1) == 0):
-                move = (i,j+1)
-                print('Threatened bridge found: {}'.format(move))
-          # Fall 3: Brücke lotrecht oben
-          if (i-1 > 0) & (j+1 < ydim):
-            if (board.get_tile(i-2,j+1) == 3 - self.currentPlayer):
-              if (board.get_tile(i-1,j) == self.currentPlayer) & (board.get_tile(i-1,j+1) == 0):
-                move = (i-1,j+1)
-                print('Threatened bridge found: {}'.format(move))
-              if (board.get_tile(i-1,j+1) == self.currentPlayer) & (board.get_tile(i-1,j) == 0):
-                move = (i-1,j)
-                print('Threatened bridge found: {}'.format(move))    
-    return thisBoard  
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 18: counterpart to (8) on the left edge
+          if (i == xdim-1) & (j < ydim-1):
+            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j+1) == 2):
+              #print('Match found! (test case 43) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 19: counterpart to (9) on the left edge
+          if (i == xdim-1) & (j < ydim-1):
+            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
+              #print('Match found! (test case 44) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              move = (i,j)
+              infilledTiles.append(move)
+            # Muster 20: counterpart to (10) on the left edge
+          if (i == xdim-1) & (j == ydim-1):
+            if (thisBoard.get_tile(i,j-1) == 2):
+              #print('Match found! (test case 45) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+              move = (i,j)
+              infilledTiles.append(move)
+        # Ladder template --- not used
+        #if (thisBoard.get_tile(i,j) == self.currentPlayer) & (self.currentPlayer == 2):
+          #if (j > 0) & (j < ydim - 1) & (i > 0):
+            #if (thisBoard.get_tile(i-1,j) == 3 - self.currentPlayer) & (thisBoard.get_tile(i-1,j-1) == 0) & (thisBoard.get_tile(i,j-1) == 0):
+              #move = (i,j-1)
+              #print('Continue ladder: {}'.format(move))
+          #if (j < ydim - 2) & (i > 0):
+            #if (thisBoard.get_tile(i-1,j+1) == 3 - self.currentPlayer) & (thisBoard.get_tile(i-1,j+2) == 0) & (thisBoard.get_tile(i,j+1) == 0):
+              #move = (i,j+1)
+              #print('Continue ladder: {}'.format(move))
+    #print('Infilled tiles: {}'.format(infilledTiles))
+    return thisBoard
+  
+  def calculateAttentionLoss(self, lastMove, nextMove):
+    """
+    Calculate the loss of 'attention' based on distance to the last move. Distance is the 'taxicab' distance, i.e., the number of moves necessary to connect the two tiles minus 1.
+
+    Parameters
+    ----------
+    lastMove: Coordinates of the last played move.
+
+    nextMove: Coordinates of the chosen next move
+    
+    Returns
+    -------
+    A numerical factor which increases with increasing distance of the next move from the last one played.
+
+    The attention loss is 0 for the first two fields and then linear thereafter and is capped at 0.6.
+    """
+    decayRate = 0.1
+    (i,j) = lastMove
+    (ii,jj) = nextMove
+    return np.minimum((np.maximum((np.absolute(i-ii) + np.absolute(j-jj) - 2), 0) * decayRate), 0.6)
