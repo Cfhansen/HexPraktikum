@@ -231,6 +231,7 @@ class MCPlayer(BasePlayer):
     for node in self.searchTree:
       if (node.getBoard().board == thisBoard.board).all():
         currentBoardState = node
+        break
         #print('Found matching node in the search tree. Current board state: {}'.format(currentBoardState.getBoard().board))
     if (currentBoardState == None):
       currentBoardState = HexNode(thisBoard, self.currentPlayer)
@@ -272,6 +273,7 @@ class MCPlayer(BasePlayer):
           if start:
             end = time.time()
             elapsed = elapsed + end - start
+            print('Elapsed time: {}'.format(elapsed))
           start = time.time()
     visitedNodes = list()
     """
