@@ -55,7 +55,7 @@ class HexNode:
 
       This is useful for RAVE evaluation where the number of UCT visits to the best node may be small.
       """
-      decayFactor = 3
+      decayFactor = 10
       return self.UCTScore - ((1 / (1 + decayFactor * np.log(np.maximum(self.numberOfVisits,1)))) * self.UCTScore)
     
     def getUCTScore(self):
@@ -87,7 +87,7 @@ class HexNode:
         proportional to the number of UCT visits. This means that the more the node is chosen first (rather than as a later AMAF move) the more confidence the algorithm places on 
         the UCT estimate.
         """
-        explorationConstant = 3
+        explorationConstant = 1000
         AMAFWeightingFactor = self.calculateAMAFWeightingFactor()
         return (self.UCTScore + explorationConstant * np.sqrt(np.log(np.maximum(self.parent.getUCTVisits(),1) / np.maximum(self.numberOfVisits,1))) * (1 - AMAFWeightingFactor) + (self.AMAFNumberOfWins / np.maximum(self.AMAFNumberOfVisits,1)) * AMAFWeightingFactor)
 
@@ -100,7 +100,7 @@ class HexNode:
 
         This means that the second term in the RAVE score, which is the product of this factor with the AMAF win ratio, also decreases in importance relative to the first term.
         """
-        equivalenceParameter = 10
+        equivalenceParameter = 10000
         return np.sqrt(equivalenceParameter / ((3 * self.numberOfVisits) + equivalenceParameter))
     
     def setUCTScore(self, val):
@@ -128,7 +128,7 @@ class MCPlayer(BasePlayer):
     self.searchNumber = 100
     self.lastMove = (0,0)
     # Not necessary for puzzles
-    self.useInfill = False
+    self.useInfill = True
     # RAVE and attention do not currently add much value. I would like to try adjusting the parameters before the tournament.
     self.useRAVE = False
     self.useAttention = False
@@ -227,8 +227,14 @@ class MCPlayer(BasePlayer):
     if self.useInfill:
       thisBoard = self.InfillBoardState(thisBoard)
 
-    currentBoardState = HexNode(thisBoard, self.currentPlayer)
-    currentBoardState.setLastMove(self.lastMove)
+    currentBoardState = None
+    for node in self.searchTree:
+      if (node.getBoard().board == thisBoard.board).all():
+        currentBoardState = node
+        #print('Found matching node in the search tree. Current board state: {}'.format(currentBoardState.getBoard().board))
+    if (currentBoardState == None):
+      currentBoardState = HexNode(thisBoard, self.currentPlayer)
+      currentBoardState.setLastMove(self.lastMove)
     """
     First: Produce a list of all possible moves. Check whether a win is possible. If it's possible to immediately win, take this move.
     """
@@ -277,22 +283,31 @@ class MCPlayer(BasePlayer):
     Hence given a game state with a guaranteed win it is indifferent between all moves.
     """  
     if currentBoardState.children:
+      #print('Number of children: {}'.format(len(currentBoardState.children)))
+      #for child in currentBoardState.children:
+        #print('UCT score of this child: {}'.format(child.getUCTScore()))
       maxUCTScore = -1
       for child in currentBoardState.children:
         if ((child.getUCTScore() > 0.9999) & (child.getLastMove() in virtualConnections)):
           bestChild = child
           #print('Bridge with UCT score 1 found at: {}'.format(child.getLastMove()))
           break
-        if (child.getUCTScore() > maxUCTScore):
-          maxUCTScore = child.getUCTScore()
-          bestChild = child
+        if (self.useRAVE == False):
+          if (child.getUCTScore() > maxUCTScore):
+            maxUCTScore = child.getUCTScore()
+            bestChild = child
+        if (self.useRAVE == True):
+          if (child.getUCTScore() > maxUCTScore):
+            #print('Switched to new node with UCT score {}'.format(child.getUCTScore()))
+            maxUCTScore = child.getUCTScore()
+            bestChild = child
       visitedNodes.append(currentBoardState)
       newBoardState = bestChild
       for i in range(xdim):
         for j in range(ydim):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
-            print('Current player: {}. We played: {}. This move had total UCT score {} and RAVE score {} with {} UCT visits and {} AMAF visits.'.format(self.currentPlayer, newMove, newBoardState.getUCTScore(), newBoardState.getRAVEScore(), newBoardState.getUCTVisits(), newBoardState.getAMAFVisits()))
+            print('Current player: {}. We played: {}. This move had total UCT score {} (discounted: {}) and RAVE score {} with {} UCT visits and {} AMAF visits.'.format(self.currentPlayer, newMove, newBoardState.getUCTScore(), newBoardState.getDiscountedUCTScore(), newBoardState.getRAVEScore(), newBoardState.getUCTVisits(), newBoardState.getAMAFVisits()))
     return newMove
   
   def CarryOutSearch(self, baseNode):
@@ -344,25 +359,32 @@ class MCPlayer(BasePlayer):
           else:
             thisNode = bestChild
         visitedNodes.append(thisNode)
-    else:
+    elif (self.useRAVE == True):
       while thisNode.children:
         if (thisNode.getCurrentPlayer() == self.currentPlayer):
           maxRAVEScore = -1
           bestChild = random.choice(thisNode.children)
           for child in thisNode.children:
             siblingsOfVisitedNodes.append(child)
-            if child.getRAVEScore() > maxRAVEScore:
-              maxUCTScore = child.getUCTScore()
+            if (child.getRAVEScore() > maxRAVEScore):
+              maxRAVEScore = child.getRAVEScore()
               bestChild = child
-          thisNode = bestChild
+          if (random.uniform(0,1) < 0.10):
+            thisNode = random.choice(thisNode.children)
+          else:
+            thisNode = bestChild
         elif (thisNode.getCurrentPlayer() == 3 - self.currentPlayer):
           minRAVEScore = 2
           bestChild = random.choice(thisNode.children)
           for child in thisNode.children:
-            if child.getRAVEScore() < minRAVEScore:
+            siblingsOfVisitedNodes.append(child)
+            if (child.getRAVEScore() < minRAVEScore):
               minRAVEScore = child.getRAVEScore()
               bestChild = child
-          thisNode = bestChild
+          if (random.uniform(0,1) < 0.10):
+            thisNode = random.choice(thisNode.children)
+          else:
+            thisNode = bestChild
         visitedNodes.append(thisNode)      
     """
     Upon reaching a leaf, we carry out a simulation and update the UCT scores of all traversed nodes. If RAVE is enabled, we update the RAVE scores of all siblings.
