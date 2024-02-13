@@ -127,11 +127,8 @@ class MCPlayer(BasePlayer):
     self.thisBoard = None
     self.searchNumber = 100
     self.lastMove = (0,0)
-    # Not necessary for puzzles
     self.useInfill = True
-    # RAVE and attention do not currently add much value. I would like to try adjusting the parameters before the tournament.
     self.useRAVE = False
-    self.useAttention = False
 
   def claim_swap(self, board, *args) -> bool:
     """
@@ -290,26 +287,17 @@ class MCPlayer(BasePlayer):
       #print('Number of children: {}'.format(len(currentBoardState.children)))
       #for child in currentBoardState.children:
         #print('UCT score of this child: {}'.format(child.getUCTScore()))
-      currentLevel = 0
       maxUCTScore = -1
       for child in currentBoardState.children:
         if ((child.getUCTScore() > 0.9999) & (child.getLastMove() in virtualConnections)):
           bestChild = child
           #print('Bridge with UCT score 1 found at: {}'.format(child.getLastMove()))
           break
-        if (self.useRAVE == False):
-          if (child.getUCTScore() > maxUCTScore):
-            maxUCTScore = child.getUCTScore()
-            bestChild = child
-        if (self.useRAVE == True):
-          if (child.getUCTScore() > maxUCTScore):
-            #print('Switched to new node with UCT score {}'.format(child.getUCTScore()))
-            maxUCTScore = child.getUCTScore()
-            bestChild = child
+        if (child.getUCTScore() > maxUCTScore):
+          maxUCTScore = child.getUCTScore()
+          bestChild = child
       visitedNodes.append(currentBoardState)
       newBoardState = bestChild
-      print('Searching at level: {}'.format(currentLevel))
-      print('Size of search tree: {}'.format(len(self.searchTree)))
       for i in range(xdim):
         for j in range(ydim):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
@@ -455,11 +443,6 @@ class MCPlayer(BasePlayer):
     """
     while validMoves:
       nextMove = self.analyzeMoves(simulatedBoard)
-      if (self.useAttention == True):
-        attentionDecayFactor = self.calculateAttentionLoss(thisNode.getLastMove(), nextMove)
-        while (random.uniform(0,1) > (1 - attentionDecayFactor)):
-          nextMove = self.analyzeMoves(simulatedBoard)
-          attentionDecayFactor = self.calculateAttentionLoss(thisNode.getLastMove(), nextMove)
       if nextMove:
         (i, j) = nextMove
         simulatedBoard.set_tile(i, j, self.simulatedPlayer)
@@ -757,7 +740,7 @@ class MCPlayer(BasePlayer):
     thisBoard: 'Infilled' hex board --- copy of the current board with dead cells filled by one of the two players.
     """
     #print('Calculating infill...')
-    infilledTiles = list()
+    #infilledTiles = list()
     thisBoard = copy.deepcopy(board)
     (xdim, ydim) = thisBoard.dim()
     for i in range(xdim):
@@ -768,289 +751,326 @@ class MCPlayer(BasePlayer):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 1) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 1.2: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1):
               #print('Match found! (test case 2) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 1.3: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1):
               #print('Match found! (test case 3) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 1.4: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1):
               #print('Match found! (test case 4) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 1.5: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1):
               #print('Match found! (test case 5) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 1.6: 4 tiles of the same color, first player
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
               #print('Match found! (test case 6) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.1: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
               #print('Match found! (test case 7) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.2: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2):
               #print('Match found! (test case 8 ) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.3: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
               #print('Match found! (test case 9) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.4: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2):
               #print('Match found! (test case 10) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.5: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
               #print('Match found! (test case 11) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 2.6: 4 tiles of the same color, second player
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
               #print('Match found! (test case 12) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.1: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 2):
               #print('Match found! (test case 13) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.2: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2):
               #print('Match found! (test case 14) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.3: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 2):
               #print('Match found! (test case 15) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.4: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j) == 2):
               #print('Match found! (test case 16) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.5: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i+1,j-1) == 2):
               #print('Match found! (test case 17) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 3.6: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2):
               #print('Match found! (test case 18) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.1: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 1):
               #print('Match found! (test case 19) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.2: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j+1) == 1):
               #print('Match found! (test case 20) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.3: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 21) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.4: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i+1,j) == 1):
               #print('Match found! (test case 22) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.5: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i+1,j-1) == 1):
               #print('Match found! (test case 23) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 4.6: 3 tiles of one color opposite 1 of the other color
             if (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i,j-1) == 1):
               #print('Match found! (test case 24) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.1: 2 tiles of one color opposite 2 of the other color
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2):
               #print('Match found! (test case 25) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.2: 2 tiles of one color opposite 2 of the other color
-            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
+            if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
               #print('Match found! (test case 26) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.3: 2 tiles of one color opposite 2 of the other color
-            if (thisBoard.get_tile(i-1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j+1) == 2):
+            if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i+1,j-1) == 2) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
               #print('Match found! (test case 27) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.4: 2 tiles of one color opposite 2 of the other color
-            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
+            if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 28) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.5: 2 tiles of one color opposite 2 of the other color
-            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
+            if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
               #print('Match found! (test case 29) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 5.6: 2 tiles of one color opposite 2 of the other color
-            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i-1,j+1) == 2) & (thisBoard.get_tile(i,j+1) == 2):
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
               #print('Match found! (test case 30) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 6: tiles directly and above left (edge pattern)  
           if (i == xdim-1) & (j > 0):
             if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j-1) == 1):
               #print('Match found! (test case 31) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 7: tiles to both sides (edge pattern)
           if (i == xdim-1) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 32) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 8: tiles above left and directly right (edge pattern)
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 33) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #nfilledTiles.append(move)
             # Muster 9: tiles above and to both sides
           if (i == xdim-1) & (j < ydim-1):
             if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i-1,j+1) == 2):
               #print('Match found! (test case 34) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 10: acute corner killed by single tile
           if (i == xdim-1) & (j == ydim-1):
             if (thisBoard.get_tile(i,j-1) == 1):
               #print('Match found! (test case 35) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # upper edge patterns
             # Muster 11: tiles directly and below right (edge pattern)
           if (i == 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i+1,j) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 36) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 12: tiles to both sides (edge pattern)
           if (i == 0) & (j > 0) & (j+1 < ydim):
             if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 37) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 13: tiles directly to the left and below to the right (edge pattern)
           if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 1):
               #print('Match found! (test case 38) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)  
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 14: tiles below to the left and right
           if (i == 0) & (j > 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i+1,j-1) == 2):
               #print('Match found! (test case 39) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 15: acute corner killed by single tile
           if (i == 0) & (j == 0):
             if (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 40) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # left edge patterns
             # Muster 16: counterpart to (6) on the left edge
           if (i < xdim - 1) & (j == 0):
             if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j+1) == 2):
               #print('Match found! (test case 41) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 17: counterpart to (7) on the left edge
-          if (i > 0) & (j == 0):
-            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i,j+1) == 1):
+          if (i > 0) & (i < xdim - 1) & (j == 0):
+            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i+1,j) == 2):
               #print('Match found! (test case 42) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 18: counterpart to (8) on the left edge
-          if (i == xdim-1) & (j < ydim-1):
-            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i,j+1) == 2):
+          if (i > 0) & (i < xdim-1) & (j == 0):
+            if (thisBoard.get_tile(i,j+1) == 1) & (thisBoard.get_tile(i-1,j) == 2):
               #print('Match found! (test case 43) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 19: counterpart to (9) on the left edge
-          if (i == xdim-1) & (j < ydim-1):
-            if (thisBoard.get_tile(i-1,j) == 1) & (thisBoard.get_tile(i-1,j+1) == 1):
+          if (i > 0) & (j == 0):
+            if (thisBoard.get_tile(i-1,j+1) == 1) & (thisBoard.get_tile(i,j+1) == 1):
               #print('Match found! (test case 44) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer) 
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
             # Muster 20: counterpart to (10) on the left edge
-          if (i == xdim-1) & (j == ydim-1):
-            if (thisBoard.get_tile(i,j-1) == 2):
+          if (i == 0) & (j == 0):
+            if (thisBoard.get_tile(i+1,j) == 2):
               #print('Match found! (test case 45) ({},{})'.format(i,j))
               thisBoard.set_tile(i, j, self.simulatedPlayer)
-              move = (i,j)
-              infilledTiles.append(move)
+              #move = (i,j)
+              #infilledTiles.append(move)
+          # right edge patterns
+            # Muster 21: counterpart to (6) on the left edge
+          if (i > 0) & (j == ydim - 1):
+            if (thisBoard.get_tile(i,j-1) == 2) & (thisBoard.get_tile(i-1,j) == 2):
+              #print('Match found! (test case 46) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+              #move = (i,j)
+              #infilledTiles.append(move)
+            # Muster 22: counterpart to (7) on the right edge
+          if (i > 0) & (i < xdim - 1) & (j == ydim - 1):
+            if (thisBoard.get_tile(i-1,j) == 2) & (thisBoard.get_tile(i+1,j) == 2):
+              #print('Match found! (test case 47) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+              #move = (i,j)
+              #infilledTiles.append(move)
+            # Muster 23: counterpart to (8) on the right edge
+          if (i > 0) & (i < xdim-1) & (j == ydim - 1):
+            if (thisBoard.get_tile(i+1,j) == 2) & (thisBoard.get_tile(i,j-1) == 1):
+              #print('Match found! (test case 48) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              #move = (i,j)
+              #infilledTiles.append(move)
+            # Muster 24: counterpart to (9) on the right edge
+          if (i < xdim - 1) & (j == ydim - 1):
+            if (thisBoard.get_tile(i,j-1) == 1) & (thisBoard.get_tile(i+1,j-1) == 1):
+              #print('Match found! (test case 49) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer) 
+              #move = (i,j)
+              #infilledTiles.append(move)
+            # Muster 25: counterpart to (10) on the right edge
+          if (i == xdim - 1) & (j == ydim - 1):
+            if (thisBoard.get_tile(i-1,j) == 2):
+              #print('Match found! (test case 50) ({},{})'.format(i,j))
+              thisBoard.set_tile(i, j, self.simulatedPlayer)
+              #move = (i,j)
+              #infilledTiles.append(move)
+        
         # Ladder template --- not used
         #if (thisBoard.get_tile(i,j) == self.currentPlayer) & (self.currentPlayer == 2):
           #if (j > 0) & (j < ydim - 1) & (i > 0):
@@ -1062,28 +1082,8 @@ class MCPlayer(BasePlayer):
               #move = (i,j+1)
               #print('Continue ladder: {}'.format(move))
     #print('Infilled tiles: {}'.format(infilledTiles))
+    #print(infilledTiles)
     return thisBoard
-  
-  def calculateAttentionLoss(self, lastMove, nextMove):
-    """
-    Calculate the loss of 'attention' based on distance to the last move. Distance is the 'taxicab' distance, i.e., the number of moves necessary to connect the two tiles minus 1.
-
-    Parameters
-    ----------
-    lastMove: Coordinates of the last played move.
-
-    nextMove: Coordinates of the chosen next move
-    
-    Returns
-    -------
-    A numerical factor which increases with increasing distance of the next move from the last one played.
-
-    The attention loss is 0 for the first two fields and then linear thereafter and is capped at 0.6.
-    """
-    decayRate = 0.1
-    (i,j) = lastMove
-    (ii,jj) = nextMove
-    return np.minimum((np.maximum((np.absolute(i-ii) + np.absolute(j-jj) - 2), 0) * decayRate), 0.6)
   
   def adjustTimeLimit(self, board):
     (xdim, ydim) = board.dim()
