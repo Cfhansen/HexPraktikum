@@ -223,6 +223,7 @@ class MCPlayer(BasePlayer):
     self.simulatedPlayer = self.get_id()
 
     thisBoard = board
+    originalBoard = copy.deepcopy(thisBoard)
 
     if self.useInfill:
       thisBoard = self.InfillBoardState(thisBoard)
@@ -236,6 +237,7 @@ class MCPlayer(BasePlayer):
     if (currentBoardState == None):
       currentBoardState = HexNode(thisBoard, self.currentPlayer)
       currentBoardState.setLastMove(self.lastMove)
+      self.searchTree.append(currentBoardState)
     """
     First: Produce a list of all possible moves. Check whether a win is possible. If it's possible to immediately win, take this move.
     """
@@ -288,6 +290,7 @@ class MCPlayer(BasePlayer):
       #print('Number of children: {}'.format(len(currentBoardState.children)))
       #for child in currentBoardState.children:
         #print('UCT score of this child: {}'.format(child.getUCTScore()))
+      currentLevel = 0
       maxUCTScore = -1
       for child in currentBoardState.children:
         if ((child.getUCTScore() > 0.9999) & (child.getLastMove() in virtualConnections)):
@@ -305,11 +308,14 @@ class MCPlayer(BasePlayer):
             bestChild = child
       visitedNodes.append(currentBoardState)
       newBoardState = bestChild
+      print('Searching at level: {}'.format(currentLevel))
+      print('Size of search tree: {}'.format(len(self.searchTree)))
       for i in range(xdim):
         for j in range(ydim):
           if (currentBoardState.getBoard().get_tile(i, j) == 0) & (newBoardState.getBoard().get_tile(i, j) != 0):
             newMove = (i, j)
             print('Current player: {}. We played: {}. This move had total UCT score {} (discounted: {}) and RAVE score {} with {} UCT visits and {} AMAF visits.'.format(self.currentPlayer, newMove, newBoardState.getUCTScore(), newBoardState.getDiscountedUCTScore(), newBoardState.getRAVEScore(), newBoardState.getUCTVisits(), newBoardState.getAMAFVisits()))
+    self.adjustTimeLimit(originalBoard)
     return newMove
   
   def CarryOutSearch(self, baseNode):
@@ -346,7 +352,7 @@ class MCPlayer(BasePlayer):
             if child.getUCTScore() > maxUCTScore:
               maxUCTScore = child.getUCTScore()
               bestChild = child
-          if (random.uniform(0,1) < 0.05):
+          if (random.uniform(0,1) < 0.10):
             thisNode = random.choice(thisNode.children)
           else:
             thisNode = bestChild
@@ -356,7 +362,7 @@ class MCPlayer(BasePlayer):
             if child.getUCTScore() < minUCTScore:
               minUCTScore = child.getUCTScore()
               bestChild = child
-          if (random.uniform(0,1) < 0.05):
+          if (random.uniform(0,1) < 0.10):
             thisNode = random.choice(thisNode.children)
           else:
             thisNode = bestChild
@@ -1078,3 +1084,17 @@ class MCPlayer(BasePlayer):
     (i,j) = lastMove
     (ii,jj) = nextMove
     return np.minimum((np.maximum((np.absolute(i-ii) + np.absolute(j-jj) - 2), 0) * decayRate), 0.6)
+  
+  def adjustTimeLimit(self, board):
+    (xdim, ydim) = board.dim()
+    numberFilled = 0
+    for i in range(xdim):
+      for j in range(ydim):
+        if not (board.get_tile(i,j) == 0):
+          numberFilled += 1
+    if (numberFilled >= ((xdim * ydim - 1) / 3)):
+      self.maxWaitTime = 17
+      #print('More than 1/3 of all tiles filled: Adjusting to 20 seconds wait time.')
+    if (numberFilled >= ((xdim * ydim - 1) / 2)):
+      self.maxWaitTime = 12
+      #print('More than 1/2 of all tiles filled: Adjusting to 15 seconds wait time.')
